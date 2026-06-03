@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:smarthome/services/home_service.dart';
+import 'package:smarthome/services/locale_service.dart';
+import 'package:smarthome/l10n/app_localizations.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -148,12 +150,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final String userName = ModalRoute.of(context)?.settings.arguments as String? ?? 'Guest';
+    final isTr = LocaleService().isTurkish;
 
     return Scaffold(
       backgroundColor: _bgColor,
       appBar: AppBar(
-        title: const Text('Security & Settings', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(l.securitySettings, style: const TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
@@ -161,26 +165,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: <Widget>[
-          _buildSectionHeader('IDENTITY'),
+          _buildSectionHeader(l.sectionIdentity),
           Card(
             color: _cardColor,
-            // FIXED: Removed 'border' parameter, used 'side'
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15), 
+              borderRadius: BorderRadius.circular(15),
               side: const BorderSide(color: Colors.white10),
             ),
             child: Column(
               children: [
                 ListTile(
                   leading: Icon(Icons.person_outline, color: _gold),
-                  title: const Text('Username', style: TextStyle(color: Colors.white)),
+                  title: Text(l.username, style: const TextStyle(color: Colors.white)),
                   subtitle: Text(userName, style: TextStyle(color: _muted)),
                   trailing: Icon(Icons.lock_outline, color: _muted, size: 16),
                 ),
                 const Divider(color: Colors.white10, height: 1),
                 ListTile(
                   leading: Icon(Icons.phone_outlined, color: _gold),
-                  title: const Text('Registered SMS Number', style: TextStyle(color: Colors.white)),
+                  title: Text(l.registeredSmsNumber, style: const TextStyle(color: Colors.white)),
                   subtitle: Text(_mockPhoneNumber, style: TextStyle(color: _muted)),
                   trailing: Icon(Icons.edit_note, color: _gold),
                   onTap: _showChangePhoneNumberDialog,
@@ -189,11 +192,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
-          _buildSectionHeader('SECURITY ACCESS'),
+          _buildSectionHeader(l.sectionSecurity),
           Card(
             color: _cardColor,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15), 
+              borderRadius: BorderRadius.circular(15),
               side: const BorderSide(color: Colors.white10),
             ),
             child: Padding(
@@ -201,12 +204,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Update Access Key', style: TextStyle(color: _gold, fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(l.updateAccessKey, style: TextStyle(color: _gold, fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 20),
-                  _buildClassyField(_currentPasswordController, 'Current Password', _isCurrentPasswordVisible, (v) => setState(() => _isCurrentPasswordVisible = v)),
-                  _buildClassyField(_newPasswordController, 'New Password', _isNewPasswordVisible, (v) => setState(() => _isNewPasswordVisible = v), error: _passwordErrorText),
-                  _buildClassyField(_confirmNewPasswordController, 'Confirm New', _isConfirmNewPasswordVisible, (v) => setState(() => _isConfirmNewPasswordVisible = v)),
-                  
+                  _buildClassyField(_currentPasswordController, l.currentPassword, _isCurrentPasswordVisible, (v) => setState(() => _isCurrentPasswordVisible = v)),
+                  _buildClassyField(_newPasswordController, l.newPassword, _isNewPasswordVisible, (v) => setState(() => _isNewPasswordVisible = v), error: _passwordErrorText),
+                  _buildClassyField(_confirmNewPasswordController, l.confirmNew, _isConfirmNewPasswordVisible, (v) => setState(() => _isConfirmNewPasswordVisible = v)),
                   const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
@@ -217,9 +219,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         foregroundColor: Colors.black,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
-                      child: _isPasswordChanging 
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
-                        : const Text('Confirm Change'),
+                      child: _isPasswordChanging
+                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          : Text(l.confirmChange),
                     ),
                   ),
                 ],
@@ -227,21 +229,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
-          _buildSectionHeader('SYSTEM'),
+          _buildSectionHeader(l.sectionSystem),
           Card(
             color: _cardColor,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
             child: Column(
               children: [
                 ListTile(
+                  leading: Icon(Icons.language, color: _gold),
+                  title: Text(l.language, style: const TextStyle(color: Colors.white)),
+                  trailing: GestureDetector(
+                    onTap: () => LocaleService().setLocale(
+                      isTr ? const Locale('en') : const Locale('tr'),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _gold.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _gold.withValues(alpha: 0.4)),
+                      ),
+                      child: Text(
+                        isTr ? '🇹🇷  Türkçe' : '🇬🇧  English',
+                        style: TextStyle(color: _gold, fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                    ),
+                  ),
+                ),
+                const Divider(color: Colors.white10, height: 1),
+                ListTile(
                   leading: const Icon(Icons.notifications_none, color: Colors.white70),
-                  title: const Text('Alert Preferences', style: TextStyle(color: Colors.white)),
+                  title: Text(l.alertPreferences, style: const TextStyle(color: Colors.white)),
                   onTap: () {},
                 ),
                 const Divider(color: Colors.white10, height: 1),
                 ListTile(
                   leading: const Icon(Icons.info_outline, color: Colors.white70),
-                  title: const Text('About Lumina v1.0', style: TextStyle(color: Colors.white)),
+                  title: Text(l.aboutApp, style: const TextStyle(color: Colors.white)),
                   onTap: () {},
                 ),
               ],
@@ -277,12 +301,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showChangePhoneNumberDialog() {
+    final l = AppLocalizations.of(context)!;
     _phoneNumberController.text = _mockPhoneNumber.replaceAll(RegExp(r'[^\d]'), '');
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardColor,
-        title: Text('Update SMS Target', style: TextStyle(color: _gold)),
+        title: Text(l.updateSmsTarget, style: TextStyle(color: _gold)),
         content: TextField(
           controller: _phoneNumberController,
           keyboardType: TextInputType.phone,
@@ -294,11 +319,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l.cancel)),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: _gold, foregroundColor: Colors.black),
             onPressed: _changePhoneNumber,
-            child: const Text('Save'),
+            child: Text(l.save),
           ),
         ],
       ),

@@ -1,0 +1,122 @@
+{
+  "@@locale": "en",
+
+  "appName": "SmartManzil",
+  "appVersion": "SmartManzil v1.0",
+  "appTagline": "Control your home, anywhere",
+
+  "welcomeBack": "Welcome back",
+  "signInToContinue": "Sign in to continue",
+  "username": "Username",
+  "email": "Email",
+  "password": "Password",
+  "usernameRequired": "Username is required",
+  "emailRequired": "Email is required",
+  "passwordRequired": "Password is required",
+  "forgotPassword": "Forgot password?",
+  "signIn": "Sign In",
+  "signInWithGoogle": "Continue with Google",
+  "orDivider": "or",
+  "resetEmailSent": "Password reset email sent.",
+
+  "goodEvening": "Good Evening, {name}",
+  "@goodEvening": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "masterControl": "Master control",
+  "mainLight": "Main Light",
+  "curtain": "Curtain",
+  "curtainOpen": "Open",
+  "curtainClosed": "Closed",
+  "masterOff": "Master Off",
+  "goodMorning": "Good Morning",
+  "goodNight": "Good Night",
+  "gate": "Gate",
+  "logout": "Log out",
+
+  "areaBedroom": "Bedroom",
+  "areaBathroom": "Bathroom",
+  "areaLivingRoom": "Living Room",
+  "areaKitchen": "Kitchen",
+  "areaGarden": "Garden",
+  "areaHall": "Hall",
+
+  "sensorsTitle": "Sensors",
+  "temperatureLabel": "Temp",
+  "humidityLabel": "Humidity",
+  "gasAlert": "Gas!",
+  "smokeAlert": "Smoke!",
+  "motionLabel": "Motion",
+  "allClear": "All Clear",
+  "lightLabel": "Light",
+  "dimmerLabel": "Dimmer",
+  "colorLabel": "Color",
+
+  "alertsTitle": "Alerts",
+  "noAlerts": "No new alerts",
+  "clearAlerts": "Clear all",
+
+  "securitySettings": "Security & Settings",
+  "sectionIdentity": "IDENTITY",
+  "sectionSecurity": "SECURITY ACCESS",
+  "sectionSystem": "SYSTEM",
+  "registeredSmsNumber": "Registered SMS Number",
+  "updateAccessKey": "Update Access Key",
+  "currentPassword": "Current Password",
+  "newPassword": "New Password",
+  "confirmNew": "Confirm New",
+  "confirmChange": "Confirm Change",
+  "alertPreferences": "Alert Preferences",
+  "aboutApp": "About Lumina v1.0",
+  "updateSmsTarget": "Update SMS Target",
+  "cancel": "Cancel",
+  "save": "Save",
+  "minCharsError": "Minimum 8 characters required.",
+  "enterNumberError": "Enter a valid number.",
+  "numberSaved": "Number stored securely.",
+  "errorSavingNumber": "Error saving number.",
+  "connectionError": "Connection error.",
+
+  "language": "Language",
+
+  "identifyAccount": "Identify\nAccount",
+  "secureVerification": "Secure\nVerification",
+  "newCredentials": "New\nCredentials",
+  "sixDigitCode": "6-Digit Code",
+  "confirmPassword": "Confirm Password",
+  "requestSmsCode": "Request SMS Code",
+  "verifyAndContinue": "Verify & Continue",
+  "resetPassword": "Reset Password",
+  "cancelRequest": "Cancel Request",
+  "pleaseEnterUsername": "Please enter your username.",
+  "invalidCode": "Invalid code. Please try again.",
+  "codeAccepted": "Code accepted. Create your new password.",
+  "passwordsDoNotMatch": "Passwords do not match.",
+  "networkError": "Network error. Please try again.",
+
+  "twoFactorTitle": "Two-Factor Verification",
+  "twoFactorBody": "A 6-digit verification code was sent to the contact on file for {username}.",
+  "@twoFactorBody": {
+    "placeholders": {
+      "username": { "type": "String" }
+    }
+  },
+  "enterSixDigitCode": "Enter the 6-digit code.",
+  "verify": "Verify",
+  "resendCode": "Resend code",
+  "resendCodeCooldown": "Resend code ({seconds} s)",
+  "@resendCodeCooldown": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "backToLogin": "Back to Login",
+
+  "roomNotFound": "Room not found",
+  "deviceOn": "ON",
+  "deviceOff": "OFF",
+  "raining": "Raining",
+  "clear": "Clear"
+}

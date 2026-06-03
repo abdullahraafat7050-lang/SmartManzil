@@ -1,377 +1,319 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:smarthome/services/home_service.dart';
+import 'package:smarthome/l10n/app_localizations.dart';
+import 'package:smarthome/services/firebase_auth_service.dart';
+import 'package:smarthome/services/firebase_service.dart';
+import 'package:smarthome/widgets/room_card.dart';
+import 'package:smarthome/widgets/sensor_panel.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // 1. SERVICE INITIALIZATION
-  final HomeService _homeService = HomeService();
-  bool _isLoading = true;
+  // Firebase rooms — keys match Firestore document IDs
+  final List<String> _roomKeys = ['bedroom', 'living', 'kitchen', 'garden'];
+  int _selectedRoom = 0;
 
-  String get userName =>
-      ModalRoute.of(context)?.settings.arguments as String? ?? 'Guest';
+  static const _gold = Color(0xFFBFA86D);
+  static const _bg = Color(0xFF0D0D0D);
+  static const _card = Color(0xFF131418);
 
-  final List<String> areas = [
-    "Bedroom",
-    "Bathroom",
-    "Living Room",
-    "Kitchen",
-    "Garden",
-    "Hall"
-  ];
-  final List<IconData> areaIcons = [
-    Icons.bedroom_child,
-    Icons.bathtub,
-    Icons.weekend,
-    Icons.kitchen,
-    Icons.park,
-    Icons.home,
-  ];
+  String _roomLabel(String key, AppLocalizations l) {
+    switch (key) {
+      case 'bedroom':
+        return l.areaBedroom;
+      case 'living':
+        return l.areaLivingRoom;
+      case 'kitchen':
+        return l.areaKitchen;
+      case 'garden':
+        return l.areaGarden;
+      default:
+        return key;
+    }
+  }
 
-  int selectedArea = 0;
+  IconData _roomIcon(String key) {
+    switch (key) {
+      case 'bedroom':
+        return Icons.bedroom_child;
+      case 'living':
+        return Icons.weekend;
+      case 'kitchen':
+        return Icons.kitchen;
+      case 'garden':
+        return Icons.park;
+      default:
+        return Icons.home;
+    }
+  }
 
-  // 2. STATE VARIABLES
-  bool _isListening = false;
-  List<bool> lcdOn = List.filled(6, false);
-  List<double> lcdValue = List.filled(6, 50.0);
-  List<bool> curtainOpen = List.filled(6, false);
-  bool gateOpen = false;
+  String get _userName {
+    final user = FirebaseAuth.instance.currentUser;
+    return user?.displayName ?? user?.email?.split('@')[0] ?? 'User';
+  }
 
-  final Map<String, bool> _deviceLoading = {};
+  Future<void> _logout() async {
+    await FirebaseAuthService().signOut();
+    if (!mounted) return;
+    Navigator.pushReplacementNamed(context, '/login');
+  }
 
-  late stt.SpeechToText speech;
-  String voiceCommand = "";
+  Future<void> _masterOff() async {
+    for (final room in _roomKeys) {
+      await FirebaseService().toggleLight(room, false);
+    }
+  }
 
-  // Theme/colors
-  final Color _bgColor = const Color.fromARGB(255, 0, 0, 0);
-  final Color _cardColor = const Color(0xFF131418);
-  final Color _muted = Colors.grey;
-  final Color _gold = const Color(0xFFBFA86D);
-  final double _cornerRadius = 14.0;
-
-  // 3. ASYNCHRONOUS DATA FETCHING
-  void _fetchInitialStatus() async {
-    try {
-      final Map<String, dynamic> status = await _homeService.getHomeStatus();
-      setState(() {
-        for (int i = 0; i < areas.length; i++) {
-          String area = areas[i];
-          if (status.containsKey(area)) {
-            lcdOn[i] = status[area]['lightOn'] ?? false;
-            lcdValue[i] = (status[area]['lightValue'] as num?)?.toDouble() ?? 50.0;
-            curtainOpen[i] = status[area]['curtainOpen'] ?? false;
-          }
-        }
-        gateOpen = status['gateOpen'] ?? false;
-        _isLoading = false;
-      });
-    } catch (e) {
-      debugPrint("Error fetching initial home status: $e");
-      setState(() => _isLoading = false);
+  Future<void> _activateScene(bool morning) async {
+    for (final room in _roomKeys) {
+      await FirebaseService().toggleLight(room, morning);
+      if (morning) await FirebaseService().setDimmer(room, 80);
     }
   }
 
   @override
-  void initState() {
-    super.initState();
-    _fetchInitialStatus();
-    speech = stt.SpeechToText();
-  }
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
 
-  @override
-  void dispose() {
-    if (speech.isListening) speech.stop();
-    super.dispose();
-  }
-
-  String _deviceKey(String area, String device) => '$area:$device';
-
-  void _sendDeviceCommand(String area, String device, dynamic value) async {
-    if (_isLoading) return;
-    final String key = _deviceKey(area, device);
-    if (_deviceLoading[key] == true) return;
-
-    setState(() => _deviceLoading[key] = true);
-    final int index = areas.indexOf(area);
-
-    try {
-      final Map<String, dynamic> result = await _homeService.setDeviceState(area, device, value);
-      if (result['success'] == true) {
-        setState(() {
-          if (device == 'lightOn' && index >= 0) {
-            lcdOn[index] = value as bool;
-          } else if (device == 'lightValue' && index >= 0) {
-            lcdValue[index] = (value as num).toDouble();
-          } else if (device == 'curtainOpen' && index >= 0) {
-            curtainOpen[index] = value as bool;
-          } else if (device == 'gateOpen') {
-            gateOpen = value as bool;
-          }
-        });
-      }
-    } catch (e) {
-      debugPrint("Network/API error: $e");
-    } finally {
-      setState(() => _deviceLoading[key] = false);
-    }
-  }
-
-  void _toggleAllLightsForRoom(String area, bool value) {
-    HapticFeedback.lightImpact();
-    _sendDeviceCommand(area, 'lightOn', value);
-  }
-
-  void _masterOffAllLights() {
-    HapticFeedback.mediumImpact();
-    for (final area in areas) {
-      _sendDeviceCommand(area, 'lightOn', false);
-    }
-  }
-
-  void _closeAllCurtains() {
-    HapticFeedback.mediumImpact();
-    for (final area in areas) {
-      _sendDeviceCommand(area, 'curtainOpen', false);
-    }
-  }
-
-  void listenVoiceCommand() async {
-    try {
-      if (speech.isListening) {
-        await speech.stop();
-        setState(() => _isListening = false);
-        return;
-      }
-      bool available = await speech.initialize();
-      if (available) {
-        setState(() => _isListening = true);
-        speech.listen(onResult: (result) {
-          setState(() => voiceCommand = result.recognizedWords);
-          final String cmd = voiceCommand.toLowerCase();
-          if (cmd.contains('turn on all lights')) {
-            for (var a in areas) _sendDeviceCommand(a, 'lightOn', true);
-          } else if (cmd.contains('turn off all lights')) {
-            for (var a in areas) _sendDeviceCommand(a, 'lightOn', false);
-          }
-        });
-      }
-    } catch (e) {
-      setState(() => _isListening = false);
-    }
-  }
-
-  void activateScene(String scene) {
-    bool isMorning = scene == "Good Morning";
-    setState(() {
-      for (int i = 0; i < areas.length; i++) {
-        lcdOn[i] = isMorning;
-        curtainOpen[i] = isMorning;
-      }
-    });
-
-    for (int i = 0; i < areas.length; i++) {
-      _sendDeviceCommand(areas[i], 'lightOn', isMorning);
-      _sendDeviceCommand(areas[i], 'curtainOpen', isMorning);
-    }
-  }
-
-  Widget _brightnessGradientBar() {
-    return Container(
-      height: 8,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        gradient: LinearGradient(
-          colors: [_gold.withOpacity(0.95), Colors.white12, Colors.grey.shade800],
-          stops: const [0.0, 0.5, 1.0],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRoomControls(int idx) {
-    final area = areas[idx];
-    final bool isHall = area.toLowerCase() == 'hall';
-    final bool isBedroom = area.toLowerCase() == 'bedroom';
-
-    return Card(
-      color: _cardColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_cornerRadius)),
-      elevation: 6,
-      child: Padding(
-        padding: const EdgeInsets.all(18.0),
+    return Scaffold(
+      backgroundColor: _bg,
+      body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(areaIcons[idx], color: _gold, size: 28),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(area, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600)),
-                    Text("Master control", style: TextStyle(color: _muted.withOpacity(0.8), fontSize: 12)),
-                  ],
-                ),
-                const Spacer(),
-                Switch(
-                  activeColor: _gold,
-                  value: lcdOn[idx],
-                  onChanged: (val) => _toggleAllLightsForRoom(area, val),
-                ),
-              ],
+            _buildHeader(l),
+            SensorPanel(),
+            _buildRoomTabs(l),
+            const SizedBox(height: 14),
+            Expanded(
+              child: RoomCard(roomKey: _roomKeys[_selectedRoom]),
             ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Icon(Icons.lightbulb, color: lcdOn[idx] ? _gold : Colors.grey.shade600),
-                const SizedBox(width: 8),
-                const Text("Main Light", style: TextStyle(color: Colors.white, fontSize: 16)),
-                const Spacer(),
-                SizedBox(
-                  width: 150,
-                  child: Slider(
-                    value: lcdValue[idx],
-                    min: 0, max: 100,
-                    onChanged: (val) => setState(() => lcdValue[idx] = val),
-                    onChangeEnd: (val) => _sendDeviceCommand(area, 'lightValue', val),
-                    activeColor: _gold,
-                  ),
-                )
-              ],
-            ),
-            if (isBedroom || isHall) ...[
-              const Divider(color: Colors.white12),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Text("Curtain", style: TextStyle(color: Colors.white)),
-                  const Spacer(),
-                  Switch(
-                    value: curtainOpen[idx],
-                    activeColor: _gold,
-                    onChanged: (val) => _sendDeviceCommand(area, 'curtainOpen', val),
-                  ),
-                  Text(curtainOpen[idx] ? "Open" : "Closed", style: TextStyle(color: _muted, fontSize: 12)),
-                ],
-              ),
-            ],
-            if (isHall) ...[
-              const SizedBox(height: 12),
-              Center(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: _gold, foregroundColor: Colors.black),
-                  onPressed: _masterOffAllLights,
-                  child: const Text("Master Off"),
-                ),
-              ),
-            ]
+            _buildSceneBar(l),
           ],
         ),
       ),
     );
   }
 
+  // ── Header ────────────────────────────────────────────────────────────────
+
+  Widget _buildHeader(AppLocalizations l) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l.goodEvening(_userName),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  'akilli-manzil',
+                  style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.35),
+                      fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          // Alerts bell
+          StreamBuilder<int>(
+            stream: _alertCountStream(),
+            builder: (_, snap) {
+              final count = snap.data ?? 0;
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_outlined,
+                        color: Colors.white70, size: 24),
+                    onPressed: () =>
+                        Navigator.pushNamed(context, '/alerts'),
+                  ),
+                  if (count > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: const BoxDecoration(
+                            color: Colors.redAccent,
+                            shape: BoxShape.circle),
+                        child: Text(
+                          count > 9 ? '9+' : '$count',
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 9),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          // Settings
+          IconButton(
+            icon: const Icon(Icons.settings_outlined,
+                color: Colors.white70, size: 22),
+            onPressed: () => Navigator.pushNamed(context, '/settings'),
+          ),
+          // Logout
+          IconButton(
+            tooltip: l.logout,
+            icon: const Icon(Icons.logout,
+                color: Colors.white54, size: 20),
+            onPressed: _logout,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Stream<int> _alertCountStream() {
+    return FirebaseService()
+        .getAlerts(limit: 50)
+        .map((snap) => snap.docs.length);
+  }
+
+  // ── Room tabs ─────────────────────────────────────────────────────────────
+
+  Widget _buildRoomTabs(AppLocalizations l) {
+    return SizedBox(
+      height: 86,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        scrollDirection: Axis.horizontal,
+        itemCount: _roomKeys.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (_, i) {
+          final selected = i == _selectedRoom;
+          return GestureDetector(
+            onTap: () => setState(() => _selectedRoom = i),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 110,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: selected
+                    ? _gold.withValues(alpha: 0.12)
+                    : _card,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                    color: selected ? _gold : Colors.transparent),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(_roomIcon(_roomKeys[i]),
+                      color: selected ? _gold : Colors.white54,
+                      size: 22),
+                  const SizedBox(height: 6),
+                  Text(
+                    _roomLabel(_roomKeys[i], l),
+                    style: TextStyle(
+                        color:
+                            selected ? Colors.white : Colors.white54,
+                        fontSize: 12,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.normal),
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Scene bar ─────────────────────────────────────────────────────────────
+
+  Widget _buildSceneBar(AppLocalizations l) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: _card,
+        border: Border(
+            top: BorderSide(
+                color: Colors.white.withValues(alpha: 0.06))),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _SceneButton(
+            icon: Icons.wb_sunny,
+            label: l.goodMorning,
+            onTap: () => _activateScene(true),
+          ),
+          _SceneButton(
+            icon: Icons.nightlight_round,
+            label: l.goodNight,
+            onTap: () => _activateScene(false),
+          ),
+          _SceneButton(
+            icon: Icons.power_settings_new,
+            label: l.masterOff,
+            onTap: _masterOff,
+            color: Colors.redAccent.withValues(alpha: 0.8),
+          ),
+          _SceneButton(
+            icon: Icons.meeting_room_outlined,
+            label: l.gate,
+            onTap: () => FirebaseService().controlServo('gate', true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Scene button ──────────────────────────────────────────────────────────────
+
+class _SceneButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? color;
+
+  const _SceneButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color,
+  });
+
+  static const _gold = Color(0xFFBFA86D);
+
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        backgroundColor: _bgColor,
-        body: Center(child: CircularProgressIndicator(color: _gold)),
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: _bgColor,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("Good Evening, $userName", 
-                  style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 14),
-              SizedBox(
-                height: 92,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: areas.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
-                  itemBuilder: (context, i) {
-                    final bool selected = i == selectedArea;
-                    return GestureDetector(
-                      onTap: () => setState(() => selectedArea = i),
-                      child: Container(
-                        width: 140,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: selected ? _gold.withOpacity(0.12) : _cardColor,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: selected ? _gold : Colors.transparent),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(areaIcons[i], color: selected ? _gold : Colors.white70),
-                            const SizedBox(height: 4),
-                            Text(areas[i], style: TextStyle(color: selected ? Colors.white : Colors.white70)),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: ListView(
-                  children: [
-                    _buildRoomControls(selectedArea),
-                    const SizedBox(height: 18),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        TextButton.icon(
-                          onPressed: () => activateScene('Good Morning'),
-                          icon: Icon(Icons.wb_sunny, color: _gold),
-                          label: const Text('Good Morning', style: TextStyle(color: Colors.white70)),
-                        ),
-                        const SizedBox(width: 12),
-                        TextButton.icon(
-                          onPressed: () => activateScene('Good Night'),
-                          icon: Icon(Icons.nightlight_round, color: _gold),
-                          label: const Text('Good Night', style: TextStyle(color: Colors.white70)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    Card(
-                      color: _cardColor,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_cornerRadius)),
-                      child: ListTile(
-                        leading: const Icon(Icons.meeting_room, color: Colors.amber),
-                        title: const Text("Gate", style: TextStyle(color: Colors.white)),
-                        trailing: Switch(
-                          value: gateOpen,
-                          activeColor: _gold,
-                          onChanged: (val) => _sendDeviceCommand('global', 'gateOpen', val),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+    final c = color ?? _gold;
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: c, size: 22),
+          const SizedBox(height: 4),
+          Text(label,
+              style: TextStyle(
+                  color: c.withValues(alpha: 0.9),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500)),
+        ],
       ),
     );
   }

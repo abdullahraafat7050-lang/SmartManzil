@@ -1,12 +1,17 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'firebase_options.dart';
+import 'global_keys.dart';
 import 'mqtt_manager.dart';
-import 'home_screen.dart';
-import 'login_screen.dart';
-import 'settings_screen.dart';
-import 'global_keys.dart'; // Import the global key
+import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/alerts_screen.dart';
+import 'screens/settings_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(
     ChangeNotifierProvider(
       create: (_) => MQTTManager()..connect(),
@@ -23,18 +28,22 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'SmartHome Pro',
       debugShowCheckedModeBanner: false,
-      scaffoldMessengerKey: scaffoldMessengerKey, // Use the global key
+      scaffoldMessengerKey: scaffoldMessengerKey,
       theme: ThemeData(
         brightness: Brightness.dark,
-        primarySwatch: Colors.blue,
         scaffoldBackgroundColor: const Color(0xFF121212),
         cardColor: const Color(0xFF1E1E1E),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFFBFA86D),
+          surface: Color(0xFF1E1E1E),
+        ),
         useMaterial3: true,
       ),
       initialRoute: '/login',
       routes: {
-        '/login': (context) => const LoginScreen(),
-        '/home': (context) => const HomeScreen(),
+        '/login':    (context) => const LoginScreen(),
+        '/home':     (context) => const HomeScreen(),
+        '/alerts':   (context) => const AlertsScreen(),
         '/settings': (context) => const SettingsScreen(),
       },
     );

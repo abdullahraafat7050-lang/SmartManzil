@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 // Firestore operations for SmartHome Pro.
 // Used alongside MQTTManager for dual-sync (Firebase = cloud, MQTT = local).
@@ -28,10 +29,24 @@ class FirebaseService {
         SetOptions(merge: true),
       );
 
-  // ── sensors/current ─────────────────────────────────────────────────────────
+  // ── sensors/current (Firestore) ──────────────────────────────────────────────
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> getSensorsData() =>
       _db.collection('sensors').doc('current').snapshots();
+
+  Future<void> updateSensor(Map<String, dynamic> data) =>
+      _db.collection('sensors').doc('current').set(
+            data,
+            SetOptions(merge: true),
+          );
+
+  // ── sensors (Realtime Database) ───────────────────────────────────────────
+
+  Stream<DatabaseEvent> getSensorsRTDB() =>
+      FirebaseDatabase.instance.ref('sensors').onValue;
+
+  Future<void> updateSensorRTDB(String key, dynamic value) =>
+      FirebaseDatabase.instance.ref('sensors/$key').set(value);
 
   // ── alerts/{autoId} ─────────────────────────────────────────────────────────
 

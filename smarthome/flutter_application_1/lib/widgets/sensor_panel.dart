@@ -1,11 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../locale_service.dart';
 import '../mqtt_manager.dart';
 import '../services/firebase_service.dart';
 
-// Shows sensor data merged from MQTT (real-time) + Firestore (cloud backup).
-// MQTT has priority for gas/smoke alerts; Firestore supplies temp/humidity.
 class SensorPanel extends StatelessWidget {
   const SensorPanel({super.key});
 
@@ -14,32 +13,43 @@ class SensorPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
+
     return Consumer<MQTTManager>(
       builder: (context, mqtt, _) {
-        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseService().getSensorsData(),
+        return StreamBuilder<DatabaseEvent>(
+          stream: FirebaseService().getSensorsRTDB(),
           builder: (context, snap) {
-            final fs = snap.data?.data() ?? {};
+            final raw = snap.data?.snapshot.value;
+            final fs = (raw is Map)
+                ? Map<String, dynamic>.from(raw as Map)
+                : <String, dynamic>{};
 
-            // Temperature & humidity from Firestore (hardware writes here)
-            final temp = (fs['temperature'] as num?)?.toDouble()
+            // Each node can be a direct value or a map {value: ...}
+            dynamic _node(String key) {
+              final n = fs[key];
+              if (n is Map) return n['value'];
+              return n;
+            }
+
+            final temp = _numVal(_node('temperature'))?.toDouble()
                 ?? mqtt.temperature;
-            final humidity = (fs['humidity'] as num?)?.toDouble()
+            final humidity = _numVal(_node('humidity'))?.toDouble()
                 ?? mqtt.humidity;
-
-            // Gas/smoke: MQTT = real-time priority, Firestore = backup
             final gasAlert = mqtt.gasStatus != 'OK'
-                || (fs['gas'] as bool? ?? false);
+                || _boolVal(_node('gas'));
             final smokeAlert = mqtt.smokeDetected
-                || (fs['smoke'] as bool? ?? false);
+                || _boolVal(_node('flame'));
             final motion = mqtt.motionDetected
-                || (fs['motion'] as bool? ?? false);
-
+                || _boolVal(_node('motion'));
+            final rainAlert = mqtt.rainStatus == 'Raining'
+                || _boolVal(_node('rain'));
             final hasAlert = gasAlert || smokeAlert;
 
             return Container(
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: _card,
                 borderRadius: BorderRadius.circular(14),
@@ -58,13 +68,13 @@ class SensorPanel extends StatelessWidget {
                     _Chip(
                       icon: Icons.thermostat,
                       value: '${temp.toStringAsFixed(1)}°C',
-                      label: 'Temp',
+                      label: s.temp,
                     ),
                   if (humidity != null)
                     _Chip(
                       icon: Icons.water_drop_outlined,
                       value: '${humidity.toStringAsFixed(0)}%',
-                      label: 'Humidity',
+                      label: s.humidity,
                     ),
                   _Chip(
                     icon: gasAlert
@@ -75,28 +85,33 @@ class SensorPanel extends StatelessWidget {
                     color: gasAlert ? Colors.redAccent : Colors.greenAccent,
                     alert: gasAlert,
                   ),
-                  if (smokeAlert)
-                    _Chip(
-                      icon: Icons.cloud_outlined,
-                      value: 'SMOKE!',
-                      label: 'Smoke',
-                      color: Colors.redAccent,
-                      alert: true,
-                    ),
-                  if (motion)
-                    _Chip(
-                      icon: Icons.directions_run,
-                      value: 'Active',
-                      label: 'Motion',
-                      color: Colors.orangeAccent,
-                    ),
-                  if (!gasAlert && !smokeAlert && !motion)
-                    _Chip(
-                      icon: Icons.check_circle_outline,
-                      value: 'All Clear',
-                      label: '',
-                      color: Colors.greenAccent,
-                    ),
+                  _Chip(
+                    icon: smokeAlert
+                        ? Icons.cloud
+                        : Icons.smoke_free,
+                    value: smokeAlert ? 'SMOKE!' : 'OK',
+                    label: s.smoke,
+                    color: smokeAlert ? Colors.redAccent : Colors.greenAccent,
+                    alert: smokeAlert,
+                  ),
+                  _Chip(
+                    icon: motion
+                        ? Icons.directions_run
+                        : Icons.accessibility_new,
+                    value: motion ? 'Motion!' : 'Clear',
+                    label: s.motion,
+                    color: motion ? Colors.orangeAccent : Colors.greenAccent,
+                    alert: motion,
+                  ),
+                  _Chip(
+                    icon: rainAlert
+                        ? Icons.umbrella
+                        : Icons.wb_sunny_outlined,
+                    value: rainAlert ? 'Rain!' : 'Dry',
+                    label: s.rain,
+                    color: rainAlert ? Colors.blueAccent : Colors.greenAccent,
+                    alert: rainAlert,
+                  ),
                 ]),
               ),
             );
@@ -105,6 +120,21 @@ class SensorPanel extends StatelessWidget {
       },
     );
   }
+}
+
+// ── RTDB value helpers ────────────────────────────────────────────────────────
+
+num? _numVal(dynamic v) {
+  if (v is num) return v;
+  if (v is String) return num.tryParse(v);
+  return null;
+}
+
+bool _boolVal(dynamic v) {
+  if (v is bool) return v;
+  if (v is num) return v != 0;
+  if (v is String) return v == '1' || v.toLowerCase() == 'true';
+  return false;
 }
 
 class _Chip extends StatelessWidget {
@@ -142,7 +172,9 @@ class _Chip extends StatelessWidget {
           children: [
             Text(value,
                 style: TextStyle(
-                    color: c, fontSize: 12, fontWeight: FontWeight.w700)),
+                    color: c,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700)),
             if (label.isNotEmpty)
               Text(label,
                   style: TextStyle(

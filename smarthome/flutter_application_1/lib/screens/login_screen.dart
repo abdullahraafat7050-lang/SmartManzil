@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../locale_service.dart';
 import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -67,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen>
     } on FirebaseAuthException catch (e) {
       setState(() => _error = AuthService().friendlyError(e));
     } catch (_) {
-      setState(() => _error = 'Connection error. Please try again.');
+      setState(() => _error = S.of(context).connectionError);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -83,23 +84,24 @@ class _LoginScreenState extends State<LoginScreen>
       setState(() => _error = AuthService().friendlyError(e));
     } catch (e) {
       if (e.toString().contains('popup-closed')) return;
-      setState(() => _error = 'Google sign-in failed.');
+      setState(() => _error = S.of(context).googleFailed);
     } finally {
       if (mounted) setState(() => _isGoogleLoading = false);
     }
   }
 
   Future<void> _forgotPassword() async {
+    final s = S.of(context);
     final email = _emailCtrl.text.trim();
     if (email.isEmpty) {
-      setState(() => _error = 'Enter your email first.');
+      setState(() => _error = s.enterEmailFirst);
       return;
     }
     try {
       await AuthService().sendPasswordResetEmail(email);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Password reset email sent.'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(s.resetEmailSent),
         backgroundColor: Colors.green,
       ));
     } on FirebaseAuthException catch (e) {
@@ -109,6 +111,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
+
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
@@ -125,18 +129,20 @@ class _LoginScreenState extends State<LoginScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox(height: 60),
-                      _buildHeader(),
+                      const SizedBox(height: 20),
+                      _LangToggle(),
+                      const SizedBox(height: 32),
+                      _buildHeader(s),
                       const SizedBox(height: 44),
-                      _buildCard(),
+                      _buildCard(s),
                       const SizedBox(height: 14),
-                      _buildForgotBtn(),
+                      _buildForgotBtn(s),
                       const SizedBox(height: 28),
-                      _buildSignInBtn(),
+                      _buildSignInBtn(s),
                       const SizedBox(height: 18),
-                      _buildDivider(),
+                      _buildDivider(s),
                       const SizedBox(height: 18),
-                      _buildGoogleBtn(),
+                      _buildGoogleBtn(s),
                       const SizedBox(height: 40),
                       Center(
                         child: Text('SmartHome Pro v1.0',
@@ -155,7 +161,7 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(S s) {
     return Column(children: [
       Container(
         width: 76,
@@ -184,13 +190,13 @@ class _LoginScreenState extends State<LoginScreen>
               fontWeight: FontWeight.w700,
               letterSpacing: 1.1)),
       const SizedBox(height: 6),
-      Text('Control your home, anywhere',
+      Text(s.tagline,
           style: TextStyle(
               color: Colors.white.withValues(alpha: 0.4), fontSize: 13)),
     ]);
   }
 
-  Widget _buildCard() {
+  Widget _buildCard(S s) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -205,28 +211,34 @@ class _LoginScreenState extends State<LoginScreen>
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Welcome back',
+        Text(s.welcomeBack,
             style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.9),
                 fontSize: 20,
                 fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
-        Text('Sign in to continue',
+        Text(s.signInToContinue,
             style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.35), fontSize: 13)),
         const SizedBox(height: 26),
         _field(
           ctrl: _emailCtrl,
-          label: 'Email',
+          label: s.email,
           icon: Icons.email_outlined,
           type: TextInputType.emailAddress,
-          validator: (v) =>
-              (v == null || v.trim().isEmpty) ? 'Email is required' : null,
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) return s.emailRequired;
+            final email = v.trim().toLowerCase();
+            if (!email.endsWith('@admin.com') && !email.endsWith('@gmail.com')) {
+              return s.emailDomainError;
+            }
+            return null;
+          },
         ),
         const SizedBox(height: 14),
         _field(
           ctrl: _passCtrl,
-          label: 'Password',
+          label: s.password,
           icon: Icons.lock_outline_rounded,
           obscure: !_showPass,
           suffix: IconButton(
@@ -239,7 +251,7 @@ class _LoginScreenState extends State<LoginScreen>
             onPressed: () => setState(() => _showPass = !_showPass),
           ),
           validator: (v) =>
-              (v == null || v.isEmpty) ? 'Password is required' : null,
+              (v == null || v.isEmpty) ? s.passwordRequired : null,
         ),
         if (_error.isNotEmpty) ...[
           const SizedBox(height: 14),
@@ -317,7 +329,7 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildForgotBtn() {
+  Widget _buildForgotBtn(S s) {
     return Align(
       alignment: Alignment.centerRight,
       child: TextButton(
@@ -325,7 +337,7 @@ class _LoginScreenState extends State<LoginScreen>
         style: TextButton.styleFrom(
             padding: EdgeInsets.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-        child: Text('Forgot password?',
+        child: Text(s.forgotPassword,
             style: TextStyle(
                 color: _gold.withValues(alpha: 0.8),
                 fontSize: 13,
@@ -334,7 +346,7 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildSignInBtn() {
+  Widget _buildSignInBtn(S s) {
     return GestureDetector(
       onTap: _isLoading ? null : _signIn,
       child: AnimatedContainer(
@@ -365,8 +377,8 @@ class _LoginScreenState extends State<LoginScreen>
                   height: 20,
                   child: CircularProgressIndicator(
                       color: _gold, strokeWidth: 2.5))
-              : const Text('Sign In',
-                  style: TextStyle(
+              : Text(s.signIn,
+                  style: const TextStyle(
                       color: _bg,
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -376,13 +388,13 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildDivider() {
+  Widget _buildDivider(S s) {
     return Row(children: [
       Expanded(
           child: Divider(color: Colors.white.withValues(alpha: 0.1))),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14),
-        child: Text('or',
+        child: Text(s.or,
             style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.35),
                 fontSize: 13)),
@@ -392,7 +404,7 @@ class _LoginScreenState extends State<LoginScreen>
     ]);
   }
 
-  Widget _buildGoogleBtn() {
+  Widget _buildGoogleBtn(S s) {
     return OutlinedButton(
       onPressed: _isGoogleLoading ? null : _googleSignIn,
       style: OutlinedButton.styleFrom(
@@ -408,22 +420,56 @@ class _LoginScreenState extends State<LoginScreen>
               height: 20,
               child: CircularProgressIndicator(
                   color: Colors.white54, strokeWidth: 2))
-          : const Row(
+          : Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('G',
+                const Text('G',
                     style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                         color: Color(0xFF4285F4))),
-                SizedBox(width: 10),
-                Text('Continue with Google',
-                    style: TextStyle(
+                const SizedBox(width: 10),
+                Text(s.continueWithGoogle,
+                    style: const TextStyle(
                         color: Colors.white,
                         fontSize: 14,
                         fontWeight: FontWeight.w500)),
               ],
             ),
+    );
+  }
+}
+
+// ── Language toggle widget ────────────────────────────────────────────────────
+
+class _LangToggle extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final isTr = LocaleService().isTurkish;
+    return Align(
+      alignment: Alignment.topRight,
+      child: GestureDetector(
+        onTap: () => LocaleService().toggle(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+                color: Colors.white.withValues(alpha: 0.12)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text(isTr ? '🇹🇷' : '🇬🇧',
+                style: const TextStyle(fontSize: 16)),
+            const SizedBox(width: 6),
+            Text(isTr ? 'TR' : 'EN',
+                style: const TextStyle(
+                    color: Color(0xFFBFA86D),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+          ]),
+        ),
+      ),
     );
   }
 }

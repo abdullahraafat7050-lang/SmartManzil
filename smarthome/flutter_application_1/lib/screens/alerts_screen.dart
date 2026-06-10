@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../locale_service.dart';
 import '../services/firebase_service.dart';
 
 class AlertsScreen extends StatelessWidget {
@@ -48,6 +49,8 @@ class AlertsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
+
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -59,8 +62,8 @@ class AlertsScreen extends StatelessWidget {
               color: Colors.white70, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Alerts',
-            style: TextStyle(
+        title: Text(s.alertsTitle,
+            style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
                 fontWeight: FontWeight.w600)),
@@ -86,9 +89,10 @@ class AlertsScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.check_circle_outline,
-                      color: Colors.white.withValues(alpha: 0.2), size: 56),
+                      color: Colors.white.withValues(alpha: 0.2),
+                      size: 56),
                   const SizedBox(height: 16),
-                  Text('No alerts',
+                  Text(s.noAlerts,
                       style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.4),
                           fontSize: 16)),
@@ -127,7 +131,8 @@ class AlertsScreen extends StatelessWidget {
                         color: color.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(_iconFor(type), color: color, size: 20),
+                      child:
+                          Icon(_iconFor(type), color: color, size: 20),
                     ),
                     const SizedBox(width: 14),
                     Expanded(

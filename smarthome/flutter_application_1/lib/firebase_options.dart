@@ -21,15 +21,15 @@ class DefaultFirebaseOptions {
     messagingSenderId: '361380915263',
     appId: '1:361380915263:web:12a35ce285e085ff85b08a',
     measurementId: 'G-CQ87DX1K5V',
+    databaseURL: 'https://akilli-manzil-default-rtdb.firebaseio.com',
   );
 
-  // Replace appId after adding Android app in Firebase Console
-  // and downloading google-services.json to android/app/
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyDolGCwYtvlqhMDNGkvvi-MdhZvpG-YcFk',
-    appId: '1:361380915263:android:REPLACE_WITH_ANDROID_APP_ID',
+    appId: '1:361380915263:android:127c6a4f00d0bcfe85b08a',
     messagingSenderId: '361380915263',
     projectId: 'akilli-manzil',
     storageBucket: 'akilli-manzil.firebasestorage.app',
+    databaseURL: 'https://akilli-manzil-default-rtdb.firebaseio.com',
   );
 }

@@ -1,29 +1,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../locale_service.dart';
 import '../mqtt_manager.dart';
 import '../services/firebase_service.dart';
 
-// Dual-sync room control card.
-// StreamBuilder reads live Firestore state.
-// On user interaction → updates BOTH Firestore AND publishes to MQTT.
 class RoomCard extends StatelessWidget {
-  final String roomKey; // 'bedroom' | 'living' | 'kitchen' | 'garden'
-
+  final String roomKey;
   const RoomCard({super.key, required this.roomKey});
 
   static const _gold = Color(0xFFBFA86D);
   static const _card = Color(0xFF1E1E1E);
 
   static const _colorPresets = [
-    Color(0xFFFFFFFF), // White
-    Color(0xFFFFE0A3), // Warm white
-    Color(0xFFFFB347), // Amber
-    Color(0xFF87CEEB), // Sky blue
-    Color(0xFF98FB98), // Pale green
-    Color(0xFFFF6B6B), // Coral red
-    Color(0xFFDDA0DD), // Plum
-    Color(0xFFFF69B4), // Pink
+    Color(0xFFFFFFFF),
+    Color(0xFFFFE0A3),
+    Color(0xFFFFB347),
+    Color(0xFF87CEEB),
+    Color(0xFF98FB98),
+    Color(0xFFFF6B6B),
+    Color(0xFFDDA0DD),
+    Color(0xFFFF69B4),
   ];
 
   String _toHex(Color c) =>
@@ -34,14 +31,12 @@ class RoomCard extends StatelessWidget {
 
   Color _parseHex(String hex) {
     try {
-      return Color(
-          int.parse('FF${hex.replaceAll('#', '')}', radix: 16));
+      return Color(int.parse('FF${hex.replaceAll('#', '')}', radix: 16));
     } catch (_) {
       return Colors.white;
     }
   }
 
-  // Dual-sync: Firestore + MQTT
   void _toggleLight(BuildContext ctx, bool current) {
     final mqtt = Provider.of<MQTTManager>(ctx, listen: false);
     FirebaseService().toggleLight(roomKey, !current);
@@ -63,6 +58,8 @@ class RoomCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
+
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseService().getRoomData(roomKey),
       builder: (context, snap) {
@@ -82,6 +79,30 @@ class RoomCard extends StatelessWidget {
         final rgbHex = data['rgb'] as String? ?? '#FFFFFF';
         final rgbColor = _parseHex(rgbHex);
 
+        return Consumer<MQTTManager>(
+          builder: (ctx, mqtt, _) => _buildCard(
+            context: ctx,
+            s: s,
+            mqtt: mqtt,
+            lightOn: lightOn,
+            dimmer: dimmer,
+            rgbHex: rgbHex,
+            rgbColor: rgbColor,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCard({
+    required BuildContext context,
+    required S s,
+    required MQTTManager mqtt,
+    required bool lightOn,
+    required int dimmer,
+    required String rgbHex,
+    required Color rgbColor,
+  }) {
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
           padding: const EdgeInsets.all(20),
@@ -105,13 +126,15 @@ class RoomCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Light toggle ────────────────────────────────────────────
+              // Light toggle
               Row(children: [
                 Icon(Icons.lightbulb_outline,
                     color: lightOn ? _gold : Colors.white38, size: 22),
                 const SizedBox(width: 10),
-                const Text('Light',
-                    style: TextStyle(color: Colors.white, fontSize: 15,
+                Text(s.light,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
                         fontWeight: FontWeight.w500)),
                 const Spacer(),
                 Switch(
@@ -121,16 +144,41 @@ class RoomCard extends StatelessWidget {
                 ),
               ]),
 
+              // Window toggle (global — one window in the house)
+              const Divider(color: Colors.white12, height: 24),
+              Row(children: [
+                Icon(Icons.window,
+                    color: mqtt.windowOpen ? Colors.lightBlueAccent : Colors.white38,
+                    size: 22),
+                const SizedBox(width: 10),
+                Text(s.window,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500)),
+                const Spacer(),
+                Switch(
+                  value: mqtt.windowOpen,
+                  activeColor: Colors.lightBlueAccent,
+                  onChanged: (_) {
+                    final next = !mqtt.windowOpen;
+                    mqtt.publishDirect('home/window', next ? '1' : '0');
+                    FirebaseService().controlServo('window', next);
+                  },
+                ),
+              ]),
+
               if (lightOn) ...[
                 const SizedBox(height: 18),
 
-                // ── Dimmer ────────────────────────────────────────────────
+                // Dimmer
                 Row(children: [
                   Icon(Icons.brightness_6_outlined,
                       color: _gold.withValues(alpha: 0.8), size: 18),
                   const SizedBox(width: 8),
-                  const Text('Dimmer',
-                      style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  Text(s.dimmer,
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 13)),
                   const Spacer(),
                   Text('$dimmer%',
                       style: const TextStyle(
@@ -158,14 +206,14 @@ class RoomCard extends StatelessWidget {
 
                 const SizedBox(height: 14),
 
-                // ── RGB color presets ─────────────────────────────────────
+                // RGB
                 Row(children: [
                   Icon(Icons.palette_outlined,
                       color: _gold.withValues(alpha: 0.8), size: 18),
                   const SizedBox(width: 8),
-                  const Text('Color',
-                      style:
-                          TextStyle(color: Colors.white70, fontSize: 13)),
+                  Text(s.color,
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 13)),
                   const SizedBox(width: 8),
                   Container(
                     width: 14,
@@ -182,8 +230,7 @@ class RoomCard extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: _colorPresets.map((c) {
-                    final selected =
-                        _toHex(c) == rgbHex.toUpperCase();
+                    final selected = _toHex(c) == rgbHex.toUpperCase();
                     return GestureDetector(
                       onTap: () => _setRGB(context, c),
                       child: AnimatedContainer(
@@ -222,7 +269,5 @@ class RoomCard extends StatelessWidget {
             ],
           ),
         );
-      },
-    );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../locale_service.dart';
 import '../mqtt_manager.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_service.dart';
@@ -32,12 +33,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
-  void _reconnect() {
+  void _reconnect(S s) {
     final mqtt = Provider.of<MQTTManager>(context, listen: false);
     mqtt.broker = _brokerCtrl.text.trim();
     mqtt.connect();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Reconnecting to MQTT broker...')),
+      SnackBar(content: Text(s.reconnecting)),
     );
   }
 
@@ -49,7 +50,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final uid = AuthService().currentUser?.uid;
+    final isTr = LocaleService().isTurkish;
 
     return Scaffold(
       backgroundColor: _bg,
@@ -62,8 +65,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               color: Colors.white70, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Settings',
-            style: TextStyle(
+        title: Text(s.settingsTitle,
+            style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
                 fontWeight: FontWeight.w600)),
@@ -78,7 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           // ── User profile ─────────────────────────────────────────────────
           if (uid != null) ...[
-            _label('PROFILE'),
+            _label(s.profileSection),
             FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
               future: FirebaseService().getUser(uid),
               builder: (ctx, snap) {
@@ -89,14 +92,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 final email = (data['email'] as String?)
                     ?? AuthService().currentUser?.email
                     ?? 'N/A';
-
-                return _cardWidget(
+                return _cardW(
                   child: Column(children: [
-                    _infoTile(Icons.person_outline, 'Name', name),
+                    _infoTile(Icons.person_outline, s.nameLabel, name),
                     Divider(
                         color: Colors.white.withValues(alpha: 0.07),
                         height: 1),
-                    _infoTile(Icons.email_outlined, 'Email', email),
+                    _infoTile(Icons.email_outlined, s.email, email),
                   ]),
                 );
               },
@@ -104,9 +106,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 24),
           ],
 
+          // ── Language ──────────────────────────────────────────────────────
+          _label(s.languageSection),
+          _cardW(
+            child: ListTile(
+              leading: const Icon(Icons.language, color: _gold),
+              title: Text(s.language,
+                  style: const TextStyle(color: Colors.white)),
+              trailing: GestureDetector(
+                onTap: () => LocaleService().toggle(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _gold.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                        color: _gold.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    isTr ? '🇹🇷  Türkçe' : '🇬🇧  English',
+                    style: const TextStyle(
+                        color: _gold,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
           // ── MQTT broker ───────────────────────────────────────────────────
           _label('MQTT BROKER'),
-          _cardWidget(
+          _cardW(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -116,7 +149,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     controller: _brokerCtrl,
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
-                      labelText: 'Broker IP Address',
+                      labelText: s.brokerIp,
                       labelStyle:
                           const TextStyle(color: Colors.white54),
                       hintText: '192.168.1.100',
@@ -147,8 +180,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(width: 6),
                       Text(
                         mqtt.isConnected
-                            ? 'Connected to ${mqtt.broker}'
-                            : 'Disconnected',
+                            ? s.connectedTo(mqtt.broker)
+                            : s.disconnected,
                         style: TextStyle(
                           color: mqtt.isConnected
                               ? Colors.greenAccent
@@ -162,15 +195,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _reconnect,
+                      onPressed: () => _reconnect(s),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _gold,
                         foregroundColor: Colors.black,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
-                      child: const Text('Reconnect',
-                          style: TextStyle(
+                      child: Text(s.reconnect,
+                          style: const TextStyle(
                               fontWeight: FontWeight.w700)),
                     ),
                   ),
@@ -181,13 +214,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
 
           // ── Account ───────────────────────────────────────────────────────
-          _label('ACCOUNT'),
-          _cardWidget(
+          _label(s.accountSection),
+          _cardW(
             child: ListTile(
-              leading: const Icon(Icons.logout,
-                  color: Colors.redAccent),
-              title: const Text('Log Out',
-                  style: TextStyle(
+              leading: const Icon(Icons.logout, color: Colors.redAccent),
+              title: Text(s.logOut,
+                  style: const TextStyle(
                       color: Colors.redAccent,
                       fontWeight: FontWeight.w500)),
               onTap: _logout,
@@ -209,12 +241,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 letterSpacing: 1.3)),
       );
 
-  Widget _cardWidget({required Widget child}) => Container(
+  Widget _cardW({required Widget child}) => Container(
         decoration: BoxDecoration(
           color: _card,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: Colors.white.withValues(alpha: 0.07)),
+          border:
+              Border.all(color: Colors.white.withValues(alpha: 0.07)),
         ),
         child: child,
       );
@@ -223,10 +255,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ListTile(
         leading: Icon(icon, color: _gold, size: 20),
         title: Text(label,
-            style: const TextStyle(
-                color: Colors.white54, fontSize: 12)),
+            style:
+                const TextStyle(color: Colors.white54, fontSize: 12)),
         subtitle: Text(value,
-            style: const TextStyle(
-                color: Colors.white, fontSize: 14)),
+            style: const TextStyle(color: Colors.white, fontSize: 14)),
       );
 }

@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../locale_service.dart';
 import '../mqtt_manager.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_service.dart';
@@ -22,26 +23,6 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _bg = Color(0xFF121212);
   static const _card = Color(0xFF1E1E1E);
 
-  String _roomLabel(String key) {
-    switch (key) {
-      case 'bedroom': return 'Bedroom';
-      case 'living':  return 'Living';
-      case 'kitchen': return 'Kitchen';
-      case 'garden':  return 'Garden';
-      default:        return key;
-    }
-  }
-
-  IconData _roomIcon(String key) {
-    switch (key) {
-      case 'bedroom': return Icons.bedroom_child;
-      case 'living':  return Icons.weekend;
-      case 'kitchen': return Icons.kitchen;
-      case 'garden':  return Icons.park;
-      default:        return Icons.home;
-    }
-  }
-
   String get _userName {
     final u = FirebaseAuth.instance.currentUser;
     return u?.displayName ?? u?.email?.split('@')[0] ?? 'User';
@@ -52,8 +33,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     Navigator.pushReplacementNamed(context, '/login');
   }
-
-  // ── Scene actions — dual-sync ─────────────────────────────────────────────
 
   Future<void> _scene(bool morning) async {
     final mqtt = Provider.of<MQTTManager>(context, listen: false);
@@ -72,32 +51,112 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _openGate() async {
-    final mqtt = Provider.of<MQTTManager>(context, listen: false);
-    await FirebaseService().controlServo('gate', true);
-    mqtt.publishDirect('home/garden/gate', 'open');
+  void _showGateBottomSheet(BuildContext ctx) {
+    final mqtt = Provider.of<MQTTManager>(ctx, listen: false);
+    showModalBottomSheet(
+      context: ctx,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.door_sliding_outlined,
+                    color: Colors.white70, size: 22),
+                SizedBox(width: 8),
+                Text(
+                  'Gate Control',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 28),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      mqtt.publishDirect('home/garden/gate', 'open');
+                      Navigator.pop(ctx);
+                    },
+                    icon: const Icon(Icons.lock_open_outlined),
+                    label: const Text('Open'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      mqtt.publishDirect('home/garden/gate', 'close');
+                      Navigator.pop(ctx);
+                    },
+                    icon: const Icon(Icons.lock_outlined),
+                    label: const Text('Close'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
+
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
         child: Column(children: [
-          _buildHeader(),
+          _buildHeader(s),
           const SensorPanel(),
-          _buildRoomTabs(),
+          _buildRoomTabs(s),
           const SizedBox(height: 12),
           Expanded(child: RoomCard(roomKey: _rooms[_selectedRoom])),
-          _buildSceneBar(),
+          _buildSceneBar(s),
         ]),
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(S s) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
       child: Row(children: [
@@ -105,12 +164,11 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Good Evening, $_userName',
+              Text(s.goodEvening(_userName),
                   style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.w700)),
-              // MQTT connection indicator
               Consumer<MQTTManager>(
                 builder: (_, mqtt, __) => Row(children: [
                   Container(
@@ -125,7 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   Text(
-                    mqtt.isConnected ? 'MQTT online' : 'MQTT offline',
+                    mqtt.isConnected ? s.mqttOnline : s.mqttOffline,
                     style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.35),
                         fontSize: 11),
@@ -173,16 +231,15 @@ class _HomeScreenState extends State<HomeScreen> {
           onPressed: () => Navigator.pushNamed(context, '/settings'),
         ),
         IconButton(
-          icon: const Icon(Icons.logout,
-              color: Colors.white38, size: 20),
-          tooltip: 'Log out',
+          icon: const Icon(Icons.logout, color: Colors.white38, size: 20),
+          tooltip: s.logout,
           onPressed: _logout,
         ),
       ]),
     );
   }
 
-  Widget _buildRoomTabs() {
+  Widget _buildRoomTabs(S s) {
     return SizedBox(
       height: 78,
       child: ListView.separated(
@@ -192,6 +249,12 @@ class _HomeScreenState extends State<HomeScreen> {
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (_, i) {
           final sel = i == _selectedRoom;
+          final icons = [
+            Icons.bedroom_child,
+            Icons.weekend,
+            Icons.kitchen,
+            Icons.park
+          ];
           return GestureDetector(
             onTap: () => setState(() => _selectedRoom = i),
             child: AnimatedContainer(
@@ -199,8 +262,7 @@ class _HomeScreenState extends State<HomeScreen> {
               width: 96,
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color:
-                    sel ? _gold.withValues(alpha: 0.12) : _card,
+                color: sel ? _gold.withValues(alpha: 0.12) : _card,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                     color: sel ? _gold : Colors.transparent),
@@ -208,14 +270,12 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(_roomIcon(_rooms[i]),
-                      color: sel ? _gold : Colors.white54,
-                      size: 20),
+                  Icon(icons[i],
+                      color: sel ? _gold : Colors.white54, size: 20),
                   const SizedBox(height: 4),
-                  Text(_roomLabel(_rooms[i]),
+                  Text(s.roomLabel(_rooms[i]),
                       style: TextStyle(
-                          color:
-                              sel ? Colors.white : Colors.white54,
+                          color: sel ? Colors.white : Colors.white54,
                           fontSize: 11,
                           fontWeight: sel
                               ? FontWeight.w600
@@ -230,7 +290,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSceneBar() {
+  Widget _buildSceneBar(S s) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
@@ -244,21 +304,21 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           _SceneBtn(
               icon: Icons.wb_sunny,
-              label: 'Good Morning',
+              label: s.goodMorning,
               onTap: () => _scene(true)),
           _SceneBtn(
               icon: Icons.nightlight_round,
-              label: 'Good Night',
+              label: s.goodNight,
               onTap: () => _scene(false)),
           _SceneBtn(
               icon: Icons.power_settings_new,
-              label: 'Master Off',
+              label: s.masterOff,
               onTap: _masterOff,
               color: Colors.redAccent.withValues(alpha: 0.8)),
           _SceneBtn(
               icon: Icons.door_sliding_outlined,
-              label: 'Gate',
-              onTap: _openGate),
+              label: s.gate,
+              onTap: () => _showGateBottomSheet(context)),
         ],
       ),
     );

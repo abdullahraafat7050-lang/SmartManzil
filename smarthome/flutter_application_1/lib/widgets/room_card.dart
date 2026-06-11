@@ -12,6 +12,12 @@ class RoomCard extends StatelessWidget {
   static const _gold = Color(0xFFBFA86D);
   static const _card = Color(0xFF1E1E1E);
 
+  static const _relayMap = {
+    'bedroom': 'light1',  // pin 22
+    'garden':  'light2',  // pin 23
+    'living':  'light3',  // pin 24
+  };
+
   static const _colorPresets = [
     Color(0xFFFFFFFF),
     Color(0xFFFFE0A3),
@@ -40,7 +46,14 @@ class RoomCard extends StatelessWidget {
   void _toggleLight(BuildContext ctx, bool current) {
     final mqtt = Provider.of<MQTTManager>(ctx, listen: false);
     FirebaseService().toggleLight(roomKey, !current);
-    mqtt.publishDirect('home/$roomKey/light', !current ? '1' : '0');
+    final relay = _relayMap[roomKey];
+    if (relay != null) {
+      final val = !current ? 0 : 1; // Active-LOW relay: 0=ON, 1=OFF
+      mqtt.publishDirect(
+        'home/home_001/actuators/lights',
+        '{"path":"actuators/$relay","value":$val}',
+      );
+    }
   }
 
   void _setDimmer(BuildContext ctx, int value) {
@@ -127,46 +140,37 @@ class RoomCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Light toggle
-              Row(children: [
-                Icon(Icons.lightbulb_outline,
-                    color: lightOn ? _gold : Colors.white38, size: 22),
-                const SizedBox(width: 10),
-                Text(s.light,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500)),
-                const Spacer(),
-                Switch(
-                  value: lightOn,
-                  activeColor: _gold,
-                  onChanged: (_) => _toggleLight(context, lightOn),
-                ),
-              ]),
+              _ToggleRow(
+                icon: Icons.lightbulb_outline,
+                label: s.light,
+                value: lightOn,
+                activeColor: _gold,
+                onChanged: (_) => _toggleLight(context, lightOn),
+              ),
 
               // Window toggle (global — one window in the house)
               const Divider(color: Colors.white12, height: 24),
-              Row(children: [
-                Icon(Icons.window,
-                    color: mqtt.windowOpen ? Colors.lightBlueAccent : Colors.white38,
-                    size: 22),
-                const SizedBox(width: 10),
-                Text(s.window,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500)),
-                const Spacer(),
-                Switch(
-                  value: mqtt.windowOpen,
-                  activeColor: Colors.lightBlueAccent,
-                  onChanged: (_) {
-                    final next = !mqtt.windowOpen;
-                    mqtt.publishDirect('home/window', next ? '1' : '0');
-                    FirebaseService().controlServo('window', next);
-                  },
-                ),
-              ]),
+              _ToggleRow(
+                icon: Icons.window,
+                label: s.window,
+                value: mqtt.windowOpen,
+                activeColor: Colors.lightBlueAccent,
+                onChanged: (_) {
+                  final next = !mqtt.windowOpen;
+                  mqtt.controlWindow(next);
+                  FirebaseService().controlServo('window', next);
+                },
+              ),
+
+              // Fan toggle
+              const Divider(color: Colors.white12, height: 24),
+              _ToggleRow(
+                icon: Icons.air,
+                label: s.fan,
+                value: mqtt.fanActive,
+                activeColor: Colors.cyanAccent,
+                onChanged: (_) => mqtt.controlFan(!mqtt.fanActive),
+              ),
 
               if (lightOn) ...[
                 const SizedBox(height: 18),
@@ -269,5 +273,58 @@ class RoomCard extends StatelessWidget {
             ],
           ),
         );
+  }
+}
+
+// ── Reusable toggle row ───────────────────────────────────────────────────────
+
+class _ToggleRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool value;
+  final Color activeColor;
+  final ValueChanged<bool> onChanged;
+
+  const _ToggleRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.activeColor,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = value ? activeColor : Colors.white38;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: value ? 0.15 : 0.06),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 26),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: TextStyle(
+            color: value ? Colors.white : Colors.white60,
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const Spacer(),
+        Switch(
+          value: value,
+          activeColor: activeColor,
+          inactiveThumbColor: Colors.white38,
+          inactiveTrackColor: Colors.white12,
+          onChanged: onChanged,
+        ),
+      ]),
+    );
   }
 }

@@ -10,7 +10,7 @@ class MQTTManager extends ChangeNotifier {
   MqttBrowserClient? _client;
 
   // ── Local broker (editable from settings) ────────────────────────────────
-  String broker = '192.168.1.112';
+  String broker = '192.168.1.106';
   int port = 9001; // WebSocket port
 
   // ── HiveMQ Cloud credentials ──────────────────────────────────────────────
@@ -159,8 +159,9 @@ class MQTTManager extends ChangeNotifier {
     _client!.subscribe('home/+/light', MqttQos.atMostOnce);
     _client!.subscribe('home/+/dimmer', MqttQos.atMostOnce);
     _client!.subscribe('home/+/motion', MqttQos.atMostOnce);
-    // Global window
-    _client!.subscribe('home/window', MqttQos.atMostOnce);
+    // Actuator feedback — gercek donanim durumu (Arduino → Pi)
+    _client!.subscribe('home/home_001/actuators/windows', MqttQos.atMostOnce);
+    _client!.subscribe('home/home_001/actuators/fan', MqttQos.atMostOnce);
 
     _updatesSubscription = _client!.updates!
         .listen((List<MqttReceivedMessage<MqttMessage>> msgs) {
@@ -207,10 +208,11 @@ class MQTTManager extends ChangeNotifier {
     } else if (topic == 'home/sensors/rain') {
       rainStatus = val == '1' ? 'Raining' : 'Dry';
       FirebaseService().updateSensorRTDB('rain', val == '1');
-    } else if (topic == 'home/sensors/fan') {
-      fanActive = val == '1' || val == 'true';
-    } else if (topic == 'home/window') {
-      windowOpen = val == '1' || val == 'true';
+    } else if (topic == 'home/home_001/actuators/fan') {
+      // Active-LOW role: Arduino 0 = fan ACIK, 1 = fan KAPALI
+      fanActive = val == '0' || val == 'false';
+    } else if (topic == 'home/home_001/actuators/windows') {
+      windowOpen = val == '1' || val == 'true' || val == 'open';
     }
     // Motion in rooms
     else if (topic.contains('/motion')) {
@@ -257,6 +259,22 @@ class MQTTManager extends ChangeNotifier {
   void updateCurtain(String room, double value) {
     curtains[room] = value;
     _publish('home/curtains/$room', value.toInt().toString());
+    notifyListeners();
+  }
+
+  void controlWindow(bool open) {
+    windowOpen = open;
+    final action = open ? 'open' : 'close';
+    _publish('home/home_001/actuators/windows',
+        '{"path":"actuators/windows","value":"$action"}');
+    notifyListeners();
+  }
+
+  void controlFan(bool active) {
+    fanActive = active;
+    final val = active ? 0 : 1; // Active-LOW: 0=ON, 1=OFF
+    _publish('home/home_001/actuators/fan',
+        '{"path":"actuators/fan","value":$val}');
     notifyListeners();
   }
 

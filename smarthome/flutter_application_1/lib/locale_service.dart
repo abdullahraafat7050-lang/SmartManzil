@@ -90,6 +90,7 @@ class S {
   String get smoke => _tr ? 'Duman' : 'Smoke';
   String get rain => _tr ? 'Yağmur' : 'Rain';
   String get window => _tr ? 'Pencere' : 'Window';
+  String get fan    => _tr ? 'Fan'     : 'Fan';
 
   // ── Alerts ─────────────────────────────────────────────────────────────────
   String get alertsTitle => _tr ? 'Uyarılar' : 'Alerts';

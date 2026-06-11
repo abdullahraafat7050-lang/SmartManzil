@@ -23,6 +23,19 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _bg = Color(0xFF121212);
   static const _card = Color(0xFF1E1E1E);
 
+  static const _relayMap = {
+    'bedroom': 'light1',  // pin 22
+    'garden':  'light2',  // pin 23
+    'living':  'light3',  // pin 24
+  };
+
+  static const _roomIcons = [
+    Icons.bedroom_child,
+    Icons.weekend,
+    Icons.kitchen,
+    Icons.park,
+  ];
+
   String get _userName {
     final u = FirebaseAuth.instance.currentUser;
     return u?.displayName ?? u?.email?.split('@')[0] ?? 'User';
@@ -39,7 +52,14 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final r in _rooms) {
       await FirebaseService().toggleLight(r, morning);
       if (morning) await FirebaseService().setDimmer(r, 80);
-      mqtt.publishDirect('home/$r/light', morning ? '1' : '0');
+      final relay = _relayMap[r];
+      if (relay != null) {
+        final val = morning ? 0 : 1; // Active-LOW relay: 0=ON, 1=OFF
+        mqtt.publishDirect(
+          'home/home_001/actuators/lights',
+          '{"path":"actuators/$relay","value":$val}',
+        );
+      }
     }
   }
 
@@ -47,7 +67,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final mqtt = Provider.of<MQTTManager>(context, listen: false);
     for (final r in _rooms) {
       await FirebaseService().toggleLight(r, false);
-      mqtt.publishDirect('home/$r/light', '0');
+      final relay = _relayMap[r];
+      if (relay != null) {
+        mqtt.publishDirect(
+          'home/home_001/actuators/lights',
+          '{"path":"actuators/$relay","value":1}',
+        );
+      }
     }
   }
 
@@ -95,7 +121,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      mqtt.publishDirect('home/garden/gate', 'open');
+                      mqtt.publishDirect(
+                        'home/home_001/actuators/gate',
+                        '{"path":"actuators/gate","value":"open"}',
+                      );
                       Navigator.pop(ctx);
                     },
                     icon: const Icon(Icons.lock_open_outlined),
@@ -114,7 +143,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      mqtt.publishDirect('home/garden/gate', 'close');
+                      mqtt.publishDirect(
+                        'home/home_001/actuators/gate',
+                        '{"path":"actuators/gate","value":"close"}',
+                      );
                       Navigator.pop(ctx);
                     },
                     icon: const Icon(Icons.lock_outlined),
@@ -143,14 +175,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: _bg,
+      bottomNavigationBar: _buildSceneBar(s),
       body: SafeArea(
         child: Column(children: [
           _buildHeader(s),
-          const SensorPanel(),
-          _buildRoomTabs(s),
-          const SizedBox(height: 12),
-          Expanded(child: RoomCard(roomKey: _rooms[_selectedRoom])),
-          _buildSceneBar(s),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(children: [
+                const SizedBox(height: 4),
+                const SensorPanel(),
+                const SizedBox(height: 12),
+                _buildRoomGrid(s),
+                const SizedBox(height: 12),
+                RoomCard(roomKey: _rooms[_selectedRoom]),
+                const SizedBox(height: 16),
+              ]),
+            ),
+          ),
         ]),
       ),
     );
@@ -193,7 +234,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        // Alerts badge
         StreamBuilder(
           stream: FirebaseService().getAlerts(limit: 50),
           builder: (ctx, snap) {
@@ -212,8 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: 16,
                     height: 16,
                     decoration: const BoxDecoration(
-                        color: Colors.redAccent,
-                        shape: BoxShape.circle),
+                        color: Colors.redAccent, shape: BoxShape.circle),
                     child: Text(
                       count > 9 ? '9+' : '$count',
                       style: const TextStyle(
@@ -239,86 +278,90 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildRoomTabs(S s) {
-    return SizedBox(
-      height: 78,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        scrollDirection: Axis.horizontal,
-        itemCount: _rooms.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (_, i) {
+  Widget _buildRoomGrid(S s) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 1.9,
+        children: List.generate(_rooms.length, (i) {
           final sel = i == _selectedRoom;
-          final icons = [
-            Icons.bedroom_child,
-            Icons.weekend,
-            Icons.kitchen,
-            Icons.park
-          ];
           return GestureDetector(
             onTap: () => setState(() => _selectedRoom = i),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              width: 96,
-              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: sel ? _gold.withValues(alpha: 0.12) : _card,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                    color: sel ? _gold : Colors.transparent),
+                  color: sel ? _gold : Colors.white.withValues(alpha: 0.07),
+                ),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(icons[i],
-                      color: sel ? _gold : Colors.white54, size: 20),
-                  const SizedBox(height: 4),
-                  Text(s.roomLabel(_rooms[i]),
-                      style: TextStyle(
-                          color: sel ? Colors.white : Colors.white54,
-                          fontSize: 11,
-                          fontWeight: sel
-                              ? FontWeight.w600
-                              : FontWeight.normal),
-                      textAlign: TextAlign.center),
+                  Icon(
+                    _roomIcons[i],
+                    color: sel ? _gold : Colors.white54,
+                    size: 32,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    s.roomLabel(_rooms[i]),
+                    style: TextStyle(
+                      color: sel ? Colors.white : Colors.white54,
+                      fontSize: 13,
+                      fontWeight:
+                          sel ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
                 ],
               ),
             ),
           );
-        },
+        }),
       ),
     );
   }
 
   Widget _buildSceneBar(S s) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: BoxDecoration(
         color: _card,
         border: Border(
-            top: BorderSide(
-                color: Colors.white.withValues(alpha: 0.06))),
+          top: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+        ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _SceneBtn(
-              icon: Icons.wb_sunny,
-              label: s.goodMorning,
-              onTap: () => _scene(true)),
+            icon: Icons.wb_sunny,
+            label: s.goodMorning,
+            onTap: () => _scene(true),
+          ),
           _SceneBtn(
-              icon: Icons.nightlight_round,
-              label: s.goodNight,
-              onTap: () => _scene(false)),
+            icon: Icons.nightlight_round,
+            label: s.goodNight,
+            onTap: () => _scene(false),
+          ),
           _SceneBtn(
-              icon: Icons.power_settings_new,
-              label: s.masterOff,
-              onTap: _masterOff,
-              color: Colors.redAccent.withValues(alpha: 0.8)),
+            icon: Icons.power_settings_new,
+            label: s.masterOff,
+            onTap: _masterOff,
+            color: Colors.redAccent.withValues(alpha: 0.8),
+          ),
           _SceneBtn(
-              icon: Icons.door_sliding_outlined,
-              label: s.gate,
-              onTap: () => _showGateBottomSheet(context)),
+            icon: Icons.door_sliding_outlined,
+            label: s.gate,
+            onTap: () => _showGateBottomSheet(context),
+          ),
         ],
       ),
     );
@@ -330,27 +373,38 @@ class _SceneBtn extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final Color? color;
+  final bool showLabel;
 
-  const _SceneBtn(
-      {required this.icon,
-      required this.label,
-      required this.onTap,
-      this.color});
+  const _SceneBtn({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color,
+    this.showLabel = true,
+  });
 
   @override
   Widget build(BuildContext context) {
     final c = color ?? const Color(0xFFBFA86D);
     return GestureDetector(
       onTap: onTap,
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, color: c, size: 22),
-        const SizedBox(height: 4),
-        Text(label,
-            style: TextStyle(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, color: c, size: 24),
+          if (showLabel) ...[
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
                 color: c.withValues(alpha: 0.9),
                 fontSize: 10,
-                fontWeight: FontWeight.w500)),
-      ]),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ]),
+      ),
     );
   }
 }

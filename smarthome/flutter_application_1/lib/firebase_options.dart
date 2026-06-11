@@ -21,7 +21,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '361380915263',
     appId: '1:361380915263:web:12a35ce285e085ff85b08a',
     measurementId: 'G-CQ87DX1K5V',
-    databaseURL: 'https://akilli-manzil-default-rtdb.firebaseio.com',
+    databaseURL: 'https://akilli-manzil-default-rtdb.europe-west1.firebasedatabase.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
@@ -30,6 +30,6 @@ class DefaultFirebaseOptions {
     messagingSenderId: '361380915263',
     projectId: 'akilli-manzil',
     storageBucket: 'akilli-manzil.firebasestorage.app',
-    databaseURL: 'https://akilli-manzil-default-rtdb.firebaseio.com',
+    databaseURL: 'https://akilli-manzil-default-rtdb.europe-west1.firebasedatabase.app',
   );
 }

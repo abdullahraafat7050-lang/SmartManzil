@@ -43,10 +43,10 @@ class FirebaseService {
   // ── sensors (Realtime Database) ───────────────────────────────────────────
 
   Stream<DatabaseEvent> getSensorsRTDB() =>
-      FirebaseDatabase.instance.ref('sensors').onValue;
+      FirebaseDatabase.instance.ref('homes/home_001/sensors').onValue;
 
   Future<void> updateSensorRTDB(String key, dynamic value) =>
-      FirebaseDatabase.instance.ref('sensors/$key').set(value);
+      FirebaseDatabase.instance.ref('homes/home_001/sensors/$key').set(value);
 
   // ── alerts/{autoId} ─────────────────────────────────────────────────────────
 

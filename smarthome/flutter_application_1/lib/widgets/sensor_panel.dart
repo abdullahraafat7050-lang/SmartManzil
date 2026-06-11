@@ -8,9 +8,6 @@ import '../services/firebase_service.dart';
 class SensorPanel extends StatelessWidget {
   const SensorPanel({super.key});
 
-  static const _gold = Color(0xFFBFA86D);
-  static const _card = Color(0xFF1E1E1E);
-
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
@@ -25,7 +22,6 @@ class SensorPanel extends StatelessWidget {
                 ? Map<String, dynamic>.from(raw as Map)
                 : <String, dynamic>{};
 
-            // Each node can be a direct value or a map {value: ...}
             dynamic _node(String key) {
               final n = fs[key];
               if (n is Map) return n['value'];
@@ -44,77 +40,49 @@ class SensorPanel extends StatelessWidget {
                 || _boolVal(_node('motion'));
             final rainAlert = mqtt.rainStatus == 'Raining'
                 || _boolVal(_node('rain'));
-            final hasAlert = gasAlert || smokeAlert;
 
-            return Container(
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: _card,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: hasAlert
-                      ? Colors.redAccent.withValues(alpha: 0.6)
-                      : Colors.white.withValues(alpha: 0.08),
-                ),
+            return Column(children: [
+              _MergedCard(
+                leftIcon: Icons.thermostat,
+                leftValue: temp != null ? '${temp.toStringAsFixed(1)}°C' : '--',
+                leftLabel: s.temp,
+                rightIcon: Icons.water_drop_outlined,
+                rightValue: humidity != null
+                    ? '${humidity.toStringAsFixed(0)}%'
+                    : '--',
+                rightLabel: s.humidity,
               ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(children: [
-                  Icon(Icons.sensors, color: _gold, size: 16),
-                  const SizedBox(width: 8),
-                  if (temp != null)
-                    _Chip(
-                      icon: Icons.thermostat,
-                      value: '${temp.toStringAsFixed(1)}°C',
-                      label: s.temp,
-                    ),
-                  if (humidity != null)
-                    _Chip(
-                      icon: Icons.water_drop_outlined,
-                      value: '${humidity.toStringAsFixed(0)}%',
-                      label: s.humidity,
-                    ),
-                  _Chip(
-                    icon: gasAlert
-                        ? Icons.warning_rounded
-                        : Icons.gas_meter_outlined,
-                    value: gasAlert ? 'GAS!' : 'OK',
-                    label: 'Gas',
-                    color: gasAlert ? Colors.redAccent : Colors.greenAccent,
-                    alert: gasAlert,
-                  ),
-                  _Chip(
-                    icon: smokeAlert
-                        ? Icons.cloud
-                        : Icons.smoke_free,
-                    value: smokeAlert ? 'SMOKE!' : 'OK',
-                    label: s.smoke,
-                    color: smokeAlert ? Colors.redAccent : Colors.greenAccent,
-                    alert: smokeAlert,
-                  ),
-                  _Chip(
-                    icon: motion
-                        ? Icons.directions_run
-                        : Icons.accessibility_new,
-                    value: motion ? 'Motion!' : 'Clear',
-                    label: s.motion,
-                    color: motion ? Colors.orangeAccent : Colors.greenAccent,
-                    alert: motion,
-                  ),
-                  _Chip(
-                    icon: rainAlert
-                        ? Icons.umbrella
-                        : Icons.wb_sunny_outlined,
-                    value: rainAlert ? 'Rain!' : 'Dry',
-                    label: s.rain,
-                    color: rainAlert ? Colors.blueAccent : Colors.greenAccent,
-                    alert: rainAlert,
-                  ),
-                ]),
+              _MergedCard(
+                leftIcon: gasAlert
+                    ? Icons.warning_rounded
+                    : Icons.gas_meter_outlined,
+                leftValue: gasAlert ? 'GAS!' : 'OK',
+                leftLabel: 'Gas',
+                leftColor: gasAlert ? Colors.redAccent : Colors.greenAccent,
+                leftAlert: gasAlert,
+                rightIcon: smokeAlert ? Icons.cloud : Icons.smoke_free,
+                rightValue: smokeAlert ? 'SMOKE!' : 'OK',
+                rightLabel: s.smoke,
+                rightColor: smokeAlert ? Colors.redAccent : Colors.greenAccent,
+                rightAlert: smokeAlert,
               ),
-            );
+              _MergedCard(
+                leftIcon: motion
+                    ? Icons.directions_run
+                    : Icons.accessibility_new,
+                leftValue: motion ? 'Motion!' : 'Clear',
+                leftLabel: s.motion,
+                leftColor: motion ? Colors.orangeAccent : Colors.greenAccent,
+                leftAlert: motion,
+                rightIcon:
+                    rainAlert ? Icons.umbrella : Icons.wb_sunny_outlined,
+                rightValue: rainAlert ? 'Rain!' : 'Dry',
+                rightLabel: s.rain,
+                rightColor:
+                    rainAlert ? Colors.blueAccent : Colors.greenAccent,
+                rightAlert: rainAlert,
+              ),
+            ]);
           },
         );
       },
@@ -122,7 +90,7 @@ class SensorPanel extends StatelessWidget {
   }
 }
 
-// ── RTDB value helpers ────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 num? _numVal(dynamic v) {
   if (v is num) return v;
@@ -137,51 +105,134 @@ bool _boolVal(dynamic v) {
   return false;
 }
 
-class _Chip extends StatelessWidget {
+// ── Merged card (2 sensors side by side) ─────────────────────────────────────
+
+class _MergedCard extends StatelessWidget {
+  final IconData leftIcon;
+  final String leftValue;
+  final String leftLabel;
+  final Color leftColor;
+  final bool leftAlert;
+
+  final IconData rightIcon;
+  final String rightValue;
+  final String rightLabel;
+  final Color rightColor;
+  final bool rightAlert;
+
+  static const _gold = Color(0xFFBFA86D);
+  static const _card = Color(0xFF1E1E1E);
+
+  const _MergedCard({
+    required this.leftIcon,
+    required this.leftValue,
+    required this.leftLabel,
+    this.leftColor = _gold,
+    this.leftAlert = false,
+    required this.rightIcon,
+    required this.rightValue,
+    required this.rightLabel,
+    this.rightColor = _gold,
+    this.rightAlert = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAlert = leftAlert || rightAlert;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: hasAlert
+              ? Colors.redAccent.withValues(alpha: 0.6)
+              : Colors.white.withValues(alpha: 0.08),
+          width: hasAlert ? 1.5 : 1.0,
+        ),
+      ),
+      child: IntrinsicHeight(
+        child: Row(children: [
+          Expanded(
+            child: _SensorHalf(
+              icon: leftIcon,
+              value: leftValue,
+              label: leftLabel,
+              color: leftColor,
+              alert: leftAlert,
+            ),
+          ),
+          VerticalDivider(
+            color: Colors.white.withValues(alpha: 0.08),
+            width: 24,
+            thickness: 1,
+          ),
+          Expanded(
+            child: _SensorHalf(
+              icon: rightIcon,
+              value: rightValue,
+              label: rightLabel,
+              color: rightColor,
+              alert: rightAlert,
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _SensorHalf extends StatelessWidget {
   final IconData icon;
   final String value;
   final String label;
-  final Color? color;
+  final Color color;
   final bool alert;
 
-  const _Chip({
+  const _SensorHalf({
     required this.icon,
     required this.value,
     required this.label,
-    this.color,
+    required this.color,
     this.alert = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? const Color(0xFFBFA86D);
-    return Container(
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: c.withValues(alpha: alert ? 0.6 : 0.3)),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, color: c, size: 14),
-        const SizedBox(width: 5),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(value,
-                style: TextStyle(
-                    color: c,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700)),
-            if (label.isNotEmpty)
-              Text(label,
-                  style: TextStyle(
-                      color: c.withValues(alpha: 0.7), fontSize: 9)),
-          ],
+    return Row(children: [
+      Container(
+        padding: const EdgeInsets.all(9),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: alert ? 0.18 : 0.12),
+          borderRadius: BorderRadius.circular(10),
         ),
-      ]),
-    );
+        child: Icon(icon, color: color, size: 26),
+      ),
+      const SizedBox(width: 10),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              color: color.withValues(alpha: 0.6),
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
+    ]);
   }
 }

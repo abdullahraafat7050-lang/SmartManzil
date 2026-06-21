@@ -6,6 +6,7 @@ import 'firebase_options.dart';
 import 'global_keys.dart';
 import 'locale_service.dart';
 import 'mqtt_manager.dart';
+import 'theme_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/alerts_screen.dart';
@@ -16,8 +17,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => MQTTManager(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => MQTTManager()),
+        ChangeNotifierProvider(create: (_) => ThemeService()),
+      ],
       child: const MyApp(),
     ),
   );
@@ -30,7 +34,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<Locale>(
       valueListenable: LocaleService().locale,
-      builder: (_, locale, __) => MaterialApp(
+      builder: (_, locale, __) => Consumer<ThemeService>(
+        builder: (_, themeSvc, __) => MaterialApp(
         title: 'SmartHome Pro',
         debugShowCheckedModeBanner: false,
         scaffoldMessengerKey: scaffoldMessengerKey,
@@ -42,6 +47,16 @@ class MyApp extends StatelessWidget {
         ],
         supportedLocales: const [Locale('en'), Locale('tr')],
         theme: ThemeData(
+          brightness: Brightness.light,
+          scaffoldBackgroundColor: Colors.white,
+          cardColor: const Color(0xFFF6F6F6),
+          colorScheme: const ColorScheme.light(
+            primary: Color(0xFFBFA86D),
+            surface: Color(0xFFF6F6F6),
+          ),
+          useMaterial3: true,
+        ),
+        darkTheme: ThemeData(
           brightness: Brightness.dark,
           scaffoldBackgroundColor: const Color(0xFF121212),
           cardColor: const Color(0xFF1E1E1E),
@@ -51,6 +66,8 @@ class MyApp extends StatelessWidget {
           ),
           useMaterial3: true,
         ),
+        themeMode: themeSvc.isDark ? ThemeMode.dark : ThemeMode.light,
+      ),
         initialRoute: '/login',
         routes: {
           '/login':    (context) => const LoginScreen(),

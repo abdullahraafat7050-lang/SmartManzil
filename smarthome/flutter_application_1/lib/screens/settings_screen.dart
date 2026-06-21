@@ -5,6 +5,7 @@ import '../locale_service.dart';
 import '../mqtt_manager.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_service.dart';
+import '../theme_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -132,6 +133,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontSize: 13),
                   ),
                 ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── Appearance (Light/Dark) ───────────────────────────────────────
+          _label(s.appearanceSection),
+          _cardW(
+            child: Consumer<ThemeService>(
+              builder: (_, themeSvc, __) => SwitchListTile(
+                value: themeSvc.isDark == false,
+                onChanged: (_) => themeSvc.toggle(),
+                title: Text(themeSvc.isDark ? s.darkMode : s.lightMode,
+                    style: const TextStyle(color: Colors.white)),
+                secondary: const Icon(Icons.brightness_6_outlined,
+                    color: _gold),
+                activeColor: _gold,
+                tileColor: Colors.transparent,
               ),
             ),
           ),

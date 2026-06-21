@@ -135,4 +135,7 @@ class S {
   String get disconnected => _tr ? 'Bağlı değil' : 'Disconnected';
   String connectedTo(String broker) =>
       _tr ? '$broker\'e bağlı' : 'Connected to $broker';
+  String get appearanceSection => _tr ? 'GÖRÜNÜM' : 'APPEARANCE';
+  String get lightMode => _tr ? 'Açık Mod' : 'Light Mode';
+  String get darkMode => _tr ? 'Karanlık Mod' : 'Dark Mode';
 }

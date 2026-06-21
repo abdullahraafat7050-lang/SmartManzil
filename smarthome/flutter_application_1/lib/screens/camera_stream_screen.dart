@@ -10,7 +10,8 @@ class CameraStreamScreen extends StatelessWidget {
     final s = S.of(context);
 
     // Set the Raspberry Pi Tailscale IP address here.
-    const String tailscaleIp = '192.168.1.114';
+    //const String tailscaleIp = '192.168.1.114';
+    const String tailscaleIp = '100.79.6.90';
     const String streamUrl = 'http://$tailscaleIp:8081';
 
     return Scaffold(

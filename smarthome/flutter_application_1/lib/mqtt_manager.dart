@@ -12,14 +12,16 @@ class MQTTManager extends ChangeNotifier {
   dynamic _client;
 
   // ── Local broker (editable from settings) ────────────────────────────────
-  String broker = '192.168.1.114';
+  //String broker = '192.168.1.114'; //local
+  //String broker = '100.79.6.90';    //Tailscale
+  String broker = '80:e1:04:be:27:c0';
   int port = 1883; // Plain MQTT port
 
   // ── Connection state ──────────────────────────────────────────────────────
   Timer? _reconnectTimer;
 
   // ── Sensor state (updated from MQTT) ──────────────────────────────────────
-  String gasStatus = 'OK';
+  String gasStatus = 'OK';  
   String rainStatus = 'Dry';
   bool fanActive = false;
   double? temperature;
@@ -187,7 +189,7 @@ class MQTTManager extends ChangeNotifier {
     } else if (topic.contains('motion')) {
       motionDetected = val == '1' || val == 'true';
       FirebaseService().updateSensorRTDB('motion', motionDetected);
-    } else if (topic.contains('gas')) {
+    } else if (topic.endsWith('/gas')) {
       final previous = gasStatus;
       gasStatus = val == '1' ? 'LEAK DETECTED' : 'OK';
       FirebaseService().updateSensorRTDB('gas', val == '1');

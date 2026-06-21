@@ -13,8 +13,7 @@ class MQTTManager extends ChangeNotifier {
 
   // ── Local broker (editable from settings) ────────────────────────────────
   //String broker = '192.168.1.114'; //local
-  //String broker = '100.79.6.90';    //Tailscale
-  String broker = '80:e1:04:be:27:c0';
+  String broker = '100.79.6.90';    //Tailscale
   int port = 1883; // Plain MQTT port
 
   // ── Connection state ──────────────────────────────────────────────────────

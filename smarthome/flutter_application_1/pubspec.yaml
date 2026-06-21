@@ -43,7 +43,6 @@ dependencies:
   google_sign_in: ^6.0.0
   web: 0.5.1
   flutter_mjpeg: ^2.0.4
-  shared_preferences: ^2.2.0
 
 dev_dependencies:
   flutter_test:

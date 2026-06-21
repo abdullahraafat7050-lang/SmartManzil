@@ -67,7 +67,6 @@ class MyApp extends StatelessWidget {
           useMaterial3: true,
         ),
         themeMode: themeSvc.isDark ? ThemeMode.dark : ThemeMode.light,
-      ),
         initialRoute: '/login',
         routes: {
           '/login':    (context) => const LoginScreen(),
@@ -77,6 +76,7 @@ class MyApp extends StatelessWidget {
           '/camera':   (context) => const CameraStreamScreen(),
         },
       ),
-    );
+    ),
+  );
   }
 }

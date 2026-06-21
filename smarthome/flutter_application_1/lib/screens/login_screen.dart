@@ -74,22 +74,6 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  Future<void> _googleSignIn() async {
-    setState(() { _isGoogleLoading = true; _error = ''; });
-    try {
-      await AuthService().signInWithGoogle();
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/home');
-    } on FirebaseAuthException catch (e) {
-      setState(() => _error = AuthService().friendlyError(e));
-    } catch (e) {
-      if (e.toString().contains('popup-closed')) return;
-      setState(() => _error = S.of(context).googleFailed);
-    } finally {
-      if (mounted) setState(() => _isGoogleLoading = false);
-    }
-  }
-
   Future<void> _forgotPassword() async {
     final s = S.of(context);
     final email = _emailCtrl.text.trim();
@@ -139,10 +123,6 @@ class _LoginScreenState extends State<LoginScreen>
                       _buildForgotBtn(s),
                       const SizedBox(height: 28),
                       _buildSignInBtn(s),
-                      const SizedBox(height: 18),
-                      _buildDivider(s),
-                      const SizedBox(height: 18),
-                      _buildGoogleBtn(s),
                       const SizedBox(height: 40),
                       Center(
                         child: Text('SmartHome Pro v1.0',
@@ -385,57 +365,6 @@ class _LoginScreenState extends State<LoginScreen>
                       letterSpacing: 0.5)),
         ),
       ),
-    );
-  }
-
-  Widget _buildDivider(S s) {
-    return Row(children: [
-      Expanded(
-          child: Divider(color: Colors.white.withValues(alpha: 0.1))),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        child: Text(s.or,
-            style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.35),
-                fontSize: 13)),
-      ),
-      Expanded(
-          child: Divider(color: Colors.white.withValues(alpha: 0.1))),
-    ]);
-  }
-
-  Widget _buildGoogleBtn(S s) {
-    return OutlinedButton(
-      onPressed: _isGoogleLoading ? null : _googleSignIn,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
-        backgroundColor: _card,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      ),
-      child: _isGoogleLoading
-          ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                  color: Colors.white54, strokeWidth: 2))
-          : Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('G',
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF4285F4))),
-                const SizedBox(width: 10),
-                Text(s.continueWithGoogle,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500)),
-              ],
-            ),
     );
   }
 }

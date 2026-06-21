@@ -10,13 +10,14 @@ import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/alerts_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/camera_stream_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(
     ChangeNotifierProvider(
-      create: (_) => MQTTManager()..connect(),
+      create: (_) => MQTTManager(),
       child: const MyApp(),
     ),
   );
@@ -56,6 +57,7 @@ class MyApp extends StatelessWidget {
           '/home':     (context) => const HomeScreen(),
           '/alerts':   (context) => const AlertsScreen(),
           '/settings': (context) => const SettingsScreen(),
+          '/camera':   (context) => const CameraStreamScreen(),
         },
       ),
     );

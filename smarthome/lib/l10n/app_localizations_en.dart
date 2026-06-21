@@ -292,4 +292,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get clear => 'Clear';
+
+  @override
+  String get cameras => 'Cameras';
+
+  @override
+  String get noCamerasFound => 'No cameras available';
+
+  @override
+  String get errorLoadingCameras => 'Error loading cameras';
 }

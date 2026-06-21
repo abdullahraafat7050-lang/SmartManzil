@@ -292,4 +292,13 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get clear => 'Açık hava';
+
+  @override
+  String get cameras => 'Cameras';
+
+  @override
+  String get noCamerasFound => 'No cameras available';
+
+  @override
+  String get errorLoadingCameras => 'Error loading cameras';
 }

@@ -23,6 +23,15 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _bg = Color(0xFF121212);
   static const _card = Color(0xFF1E1E1E);
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final mqtt = Provider.of<MQTTManager>(context, listen: false);
+      mqtt.connect();
+    });
+  }
+
   static const _relayMap = {
     'bedroom': 'light1',  // pin 22
     'garden':  'light2',  // pin 23
@@ -54,26 +63,43 @@ class _HomeScreenState extends State<HomeScreen> {
       if (morning) await FirebaseService().setDimmer(r, 80);
       final relay = _relayMap[r];
       if (relay != null) {
-        final val = morning ? 0 : 1; // Active-LOW relay: 0=ON, 1=OFF
+        final val = morning ? 1 : 0; // 1=ON, 0=OFF
         mqtt.publishDirect(
           'home/home_001/actuators/lights',
           '{"path":"actuators/$relay","value":$val}',
         );
+        await Future.delayed(const Duration(milliseconds: 150));
       }
     }
   }
 
   Future<void> _masterOff() async {
     final mqtt = Provider.of<MQTTManager>(context, listen: false);
+
+    // إطفاء كل الأنوار بدون delays (منع infinite loop)
+    mqtt.publishDirect('home/home_001/actuators/lights', '{"path":"actuators/light1","value":0}');
+    mqtt.publishDirect('home/home_001/actuators/lights', '{"path":"actuators/light2","value":0}');
+    mqtt.publishDirect('home/home_001/actuators/lights', '{"path":"actuators/light3","value":0}');
+
+    // إطفاء المروحة
+    mqtt.publishDirect('home/home_001/actuators/fan', '{"path":"actuators/fan","value":0}');
+    mqtt.recordAction('fan', 'Fan turned off requested');
+
+    // إغلاق الشباك
+    mqtt.publishDirect('home/home_001/actuators/windows', '{"path":"actuators/windows","value":"close"}');
+    mqtt.recordAction('window', 'Window close requested');
+
+    // إغلاق البوابة (Gate)
+    await Future.delayed(const Duration(milliseconds: 100));
+    mqtt.publishDirect(
+      'home/home_001/actuators/gate',
+      '{"path":"actuators/gate","value":"close"}',
+    );
+    mqtt.recordAction('gate', 'Gate close requested');
+
+    // تحديث Firebase بدون انتظار
     for (final r in _rooms) {
-      await FirebaseService().toggleLight(r, false);
-      final relay = _relayMap[r];
-      if (relay != null) {
-        mqtt.publishDirect(
-          'home/home_001/actuators/lights',
-          '{"path":"actuators/$relay","value":1}',
-        );
-      }
+      FirebaseService().toggleLight(r, false);
     }
   }
 
@@ -125,6 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         'home/home_001/actuators/gate',
                         '{"path":"actuators/gate","value":"open"}',
                       );
+                      mqtt.recordAction('gate', 'Gate open requested');
                       Navigator.pop(ctx);
                     },
                     icon: const Icon(Icons.lock_open_outlined),
@@ -147,6 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         'home/home_001/actuators/gate',
                         '{"path":"actuators/gate","value":"close"}',
                       );
+                      mqtt.recordAction('gate', 'Gate close requested');
                       Navigator.pop(ctx);
                     },
                     icon: const Icon(Icons.lock_outlined),
@@ -246,23 +274,22 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               if (count > 0)
                 Positioned(
-                  right: 8,
-                  top: 8,
+                  right: 10,
+                  top: 10,
                   child: Container(
-                    width: 16,
-                    height: 16,
+                    width: 12,
+                    height: 12,
                     decoration: const BoxDecoration(
                         color: Colors.redAccent, shape: BoxShape.circle),
-                    child: Text(
-                      count > 9 ? '9+' : '$count',
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 9),
-                      textAlign: TextAlign.center,
-                    ),
                   ),
                 ),
             ]);
           },
+        ),
+        IconButton(
+          icon: const Icon(Icons.videocam_outlined,
+              color: Colors.white70, size: 22),
+          onPressed: () => Navigator.pushNamed(context, '/camera'),
         ),
         IconButton(
           icon: const Icon(Icons.settings_outlined,

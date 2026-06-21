@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:smarthome/l10n/app_localizations.dart';
+import 'package:smarthome/screens/camera_feed_screen.dart';
 import 'package:smarthome/services/firebase_auth_service.dart';
 import 'package:smarthome/services/firebase_service.dart';
 import 'package:smarthome/widgets/room_card.dart';
@@ -161,6 +162,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               );
             },
+          ),
+          // Camera
+          IconButton(
+            icon: const Icon(Icons.videocam_outlined,
+                color: Colors.white70, size: 22),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const CameraFeedScreen(),
+              ),
+            ),
           ),
           // Settings
           IconButton(

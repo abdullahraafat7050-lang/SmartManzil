@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:smarthome/models/camera.dart';
 
 // Firestore structure:
 //   devices/{room}   → light (bool), dimmer (int), rgb (string)
@@ -41,6 +42,15 @@ class FirebaseService {
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> getSensorsData() =>
       _db.collection('sensors').doc('current').snapshots();
+
+  // ── Cameras ────────────────────────────────────────────────────────────────
+
+  Stream<List<Camera>> getCameras() =>
+      _db.collection('cameras').snapshots().map((snapshot) {
+        return snapshot.docs
+            .map((doc) => Camera.fromJson({...doc.data(), 'id': doc.id}))
+            .toList();
+      });
 
   // ── Alerts ─────────────────────────────────────────────────────────────────
 

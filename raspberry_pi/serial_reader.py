@@ -2,11 +2,17 @@
 # ==================================================
 # aklli_manzil - Raspberry Pi Seri Port Okuyucu
 # Arduino Mega'dan JSON verisi alir ve MQTT'ye gonderir
+#
+# Duzeltmeler:
+#   - Loop-back korumasi duzeltildi: ts alani yoksayilir
+#   - Lights komutu duzeltildi
+#   - main() tekrar cagri kaldirildi
 # ==================================================
 
 import serial
 import json
 import time
+import threading
 import logging
 import paho.mqtt.client as mqtt
 
@@ -15,14 +21,60 @@ from config import (
     MQTT_BROKER, MQTT_PORT, MQTT_KEEPALIVE, MQTT_CLIENT_SERIAL,
     MQTT_USERNAME, MQTT_PASSWORD,
     HOME_ID, SENSOR_PATHS, ACTUATOR_TOPICS, QOS_SENSOR, QOS_ACTUATOR,
-    RECONNECT_DELAY, LOG_LEVEL
+    RECONNECT_DELAY
 )
 
 # ---------------- LOGLAMA ----------------
 log = logging.getLogger(__name__)
 
-# Global seri port nesnesi (MQTT callback tarafindan yazmak icin)
 _ser = None
+
+# ── Loop-back korumasi ────────────────────────────────────────────────────────
+# Kaydedilen komutlar: (path_son, value) tuple olarak saklanir
+# ts alani yoksayilir — her mesajda farklidir
+_sent_lock: threading.Lock = threading.Lock()
+_sent_commands: set = set()
+
+def _normalize(payload_str: str):
+    """
+    Payload'dan (path son kismi, value) tuple'i cikar.
+    ts alani yoksayilir.
+    Ornek: {"path":"actuators/alarm","value":0} -> ("alarm", 0)
+    Ornek: {"ts":123,"value":0} -> None (path yok, sensor mesaji)
+    """
+    try:
+        data = json.loads(payload_str)
+        path  = data.get("path", "")
+        value = data.get("value")
+        if path and value is not None:
+            return (path.split("/")[-1], value)
+    except Exception:
+        pass
+    return None
+
+def _remember_sent(path: str, value) -> None:
+    key = (path.split("/")[-1], value)
+    with _sent_lock:
+        _sent_commands.add(key)
+    threading.Timer(3.0, lambda: _forget_sent(key)).start()
+
+def _forget_sent(key) -> None:
+    with _sent_lock:
+        _sent_commands.discard(key)
+
+def _was_sent_by_us(payload_str: str) -> bool:
+    key = _normalize(payload_str)
+    if key is None:
+        return False
+    with _sent_lock:
+        return key in _sent_commands
+
+# ── Flutter direkt light topic esleme ────────────────────────────────────────
+FLUTTER_LIGHT_TOPICS = {
+    "home/bedroom/light": "actuators/light1",
+    "home/living/light":  "actuators/light2",
+    "home/kitchen/light": "actuators/light3",
+}
 
 # ---------------- MQTT CALLBACK'LER ----------------
 def on_connect(client, userdata, flags, rc):
@@ -31,15 +83,13 @@ def on_connect(client, userdata, flags, rc):
         for topic in ACTUATOR_TOPICS.values():
             client.subscribe(topic, qos=QOS_ACTUATOR)
             log.info(f"Abone olundu (Aktuator): {topic}")
-
-        wildcard = f"home/{HOME_ID}/actuators/#"
-        client.subscribe(wildcard, qos=QOS_ACTUATOR)
-        log.info(f"Abone olundu (Wildcard): {wildcard}")
+        client.subscribe("home/+/light", qos=QOS_ACTUATOR)
+        log.info("Abone olundu (Flutter lights): home/+/light")
     else:
         log.error(f"MQTT baglanti hatasi, kod: {rc}")
 
 def on_disconnect(client, userdata, rc):
-    log.warning(f"MQTT baglantisi kesildi (rc={rc}). Yeniden baglaniliyor...")
+    log.warning(f"MQTT baglantisi kesildi (rc={rc}).")
 
 def on_message(client, userdata, msg):
     global _ser
@@ -47,101 +97,111 @@ def on_message(client, userdata, msg):
         log.warning("Seri port acik degil, komut gonderilemedi.")
         return
 
-    topic = msg.topic
+    topic       = msg.topic
     payload_str = msg.payload.decode("utf-8", errors="ignore")
+
+    # ── Loop-back korumasi: ts'siz karsilastirma ──
+    if _was_sent_by_us(payload_str):
+        log.debug(f"Loop-back mesaji yoksayildi: {topic}")
+        return
+
     log.info(f"MQTT'den mesaj alindi: {topic} -> {payload_str}")
 
     try:
         data = json.loads(payload_str)
-    except:
+    except Exception:
         data = payload_str
+
+    # ── تخطي Arduino feedback (إذا لم تكن "path" موجودة، فهي feedback) ──
+    if isinstance(data, dict) and "path" not in data:
+        log.debug(f"Arduino feedback yoksayildi: {payload_str}")
+        return
 
     commands_to_send = []
 
-    parts = topic.split("/")
-    if len(parts) >= 4 and parts[2] == "actuators":
-        actuator = parts[3]
+    # ── 1. Flutter direkt light topic'leri ──
+    if topic in FLUTTER_LIGHT_TOPICS:
+        arduino_path = FLUTTER_LIGHT_TOPICS[topic]
+        raw_val = data if not isinstance(data, dict) else data.get("value", data.get("action", 0))
+        int_val = 1 if str(raw_val).lower() in ["1", "true", "on"] else 0
+        commands_to_send.append({"path": arduino_path, "value": int_val})
 
-        # 1. Isik kontrolu
-        if actuator == "lights":
-            if isinstance(data, dict):
-                for key in ["light1", "light2", "light3"]:
-                    if key in data:
-                        val = data[key]
-                        if isinstance(val, dict):
-                            val = val.get("value", 0)
-                        int_val = 1 if (val == 1 or val is True or str(val).lower() in ["1", "true", "on"]) else 0
-                        commands_to_send.append({"path": f"actuators/{key}", "value": int_val})
+    # ── 2. home/{HOME_ID}/actuators/... topic'leri ──
+    else:
+        parts = topic.split("/")
+        if len(parts) >= 4 and parts[2] == "actuators":
+            actuator = parts[3]
 
-                if "path" in data and "value" in data:
-                    sub = data["path"].split("/")[-1]
-                    val = data["value"]
-                    int_val = 1 if (val == 1 or val is True or str(val).lower() in ["1", "true", "on"]) else 0
-                    commands_to_send.append({"path": f"actuators/{sub}", "value": int_val})
-
-                if "action" in data and "rooms" in data:
-                    action = data["action"]
-                    rooms = data["rooms"]
-                    int_val = 1 if action in ["on", "open"] else 0
-                    room_to_light = {
-                        "bedroom": "light1",
-                        "living": "light2",
-                        "living_room": "light2",
-                        "kitchen": "light3"
-                    }
-                    for room in rooms:
-                        light_key = room_to_light.get(room)
-                        if light_key:
-                            commands_to_send.append({"path": f"actuators/{light_key}", "value": int_val})
-            else:
-                try:
-                    int_val = 1 if (data == 1 or data is True or str(data).lower() in ["1", "true", "on"]) else 0
+            if actuator == "lights":
+                if isinstance(data, dict):
                     for key in ["light1", "light2", "light3"]:
-                        commands_to_send.append({"path": f"actuators/{key}", "value": int_val})
-                except:
-                    pass
+                        if key in data:
+                            val = data[key]
+                            if isinstance(val, dict):
+                                val = val.get("value", 0)
+                            int_val = 1 if str(val).lower() in ["1", "true", "on"] else 0
+                            commands_to_send.append({"path": f"actuators/{key}", "value": int_val})
 
-        # 2. Diger aktuatorler (kapi, pencere, alarm, fan, servo)
-        else:
-            val = data
-            if isinstance(data, dict):
-                if "value" in data:
-                    val = data["value"]
-                elif "action" in data:
-                    val = data["action"]
-                elif "state" in data:
-                    val = data["state"]
+                    if "path" in data and "value" in data:
+                        commands_to_send.append({
+                            "path":  data["path"],
+                            "value": 1 if str(data["value"]).lower() in ["1", "true", "on"] else 0
+                        })
 
-            # Pencere/kapi icin string degerler
-            str_val = str(val).lower()
-            if actuator in ("windows", "gate"):
-                action = "open" if str_val in ["1", "true", "on", "open"] else "close"
-                commands_to_send.append({"path": f"actuators/{actuator}", "value": action})
+                    if "action" in data and "rooms" in data:
+                        int_val = 1 if data["action"] in ["on", "open"] else 0
+                        room_map = {
+                            "bedroom":     "light1",
+                            "living":      "light2",
+                            "living_room": "light2",
+                            "kitchen":     "light3",
+                        }
+                        for room in data["rooms"]:
+                            lk = room_map.get(room)
+                            if lk:
+                                commands_to_send.append({"path": f"actuators/{lk}", "value": int_val})
+
             else:
-                # Fan ve diger relay'lar icin int deger
-                int_val = 0
-                if val == 1 or val is True or str_val in ["1", "true", "on", "open"]:
-                    int_val = 1
-                elif val == 0 or val is False or str_val in ["0", "false", "off", "close", "lock"]:
-                    int_val = 0
+                val = data
+                if isinstance(data, dict):
+                    val = data.get("value", data.get("action", data.get("state", 0)))
+
+                # معالجة خاصة لـ windows, gate, doors (يجب string)
+                if actuator in ("windows", "gate", "doors"):
+                    str_val = str(val).lower()
+                    action = "open" if str_val in ["1", "true", "on", "open"] else "close"
+                    commands_to_send.append({"path": f"actuators/{actuator}", "value": action})
                 else:
-                    try:
-                        int_val = int(val)
-                    except:
+                    # Fan وأجهزة relay أخرى تحتاج int
+                    int_val = 0
+                    if str(val).lower() in ["1", "true", "on", "open"]:
+                        int_val = 1
+                    elif str(val).lower() in ["0", "false", "off", "close", "lock"]:
                         int_val = 0
-                subpath = "/".join(parts[3:])
-                commands_to_send.append({"path": f"actuators/{subpath}", "value": int_val})
+                    else:
+                        try:
+                            int_val = int(val)
+                        except Exception:
+                            int_val = 0
+
+                    subpath = "/".join(parts[3:])
+                    commands_to_send.append({"path": f"actuators/{subpath}", "value": int_val})
 
     if not commands_to_send:
-        commands_to_send.append({"topic": topic, "payload": data})
+        log.warning(f"Komut olusturulamadi, atlanıyor: {topic} -> {payload_str}")
+        return
 
+    # Arduino'ya gonder
     for cmd in commands_to_send:
-        command_str = json.dumps(cmd) + "\n"
+        command_str = json.dumps(cmd)
+        # ✅ path ve value tuple olarak kaydet (ts yoksayilir)
+        _remember_sent(cmd["path"], cmd["value"])
         try:
-            _ser.write(command_str.encode("utf-8"))
-            log.info(f"Arduino'ya gonderildi: {command_str.strip()}")
+            _ser.write((command_str + "\n").encode("utf-8"))
+            log.info(f"Arduino'ya gonderildi: {command_str}")
         except Exception as e:
             log.error(f"Arduino'ya yazma hatasi: {e}")
+
 
 # ---------------- ANA ISLEVLER ----------------
 def build_mqtt_topic(path: str) -> str:
@@ -159,8 +219,8 @@ def process_line(line: str, mqtt_client: mqtt.Client) -> None:
         log.warning(f"Gecersiz JSON: {line}")
         return
 
-    if "debug" in data:
-        log.debug(f"[DEBUG] {data}")
+    if "debug" in data or "ack" in data:
+        log.debug(f"[SKIP] {data}")
         return
 
     path  = data.get("path")
@@ -211,9 +271,7 @@ def main():
             time.sleep(RECONNECT_DELAY)
 
     client.loop_start()
-
     _ser = open_serial(SERIAL_PORT, SERIAL_BAUD)
-
     log.info("Seri okuma dongusu basladi...")
 
     while True:

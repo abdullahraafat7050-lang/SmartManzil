@@ -91,10 +91,33 @@ class S {
   String get rain => _tr ? 'Yağmur' : 'Rain';
   String get window => _tr ? 'Pencere' : 'Window';
   String get fan    => _tr ? 'Fan'     : 'Fan';
+  String get gas    => _tr ? 'Gaz' : 'Gas';
+  String get fire   => _tr ? 'Yangın' : 'Fire';
+  String get door   => _tr ? 'Kapı' : 'Door';
+  String get automation => _tr ? 'Otomasyon' : 'Automation';
 
   // ── Alerts ─────────────────────────────────────────────────────────────────
   String get alertsTitle => _tr ? 'Uyarılar' : 'Alerts';
   String get noAlerts => _tr ? 'Yeni uyarı yok' : 'No alerts';
+
+  // ── Automation Alerts ──────────────────────────────────────────────────────
+  String get fireDetectedTitle => _tr ? '🔥 Yangın Algılandı!' : '🔥 Fire Detected!';
+  String get fireDetectedMsg => _tr ? 'Tüm kapılar ve pencereler açılıyor' : 'All doors and windows opening';
+
+  String get gasDetectedTitle => _tr ? '💨 Gaz Algılandı!' : '💨 Gas Detected!';
+  String get gasDetectedMsg => _tr ? 'Fan ve pencereler açılıyor' : 'Fan and windows opening';
+
+  String get rainDetectedTitle => _tr ? '🌧️ Yağmur Algılandı!' : '🌧️ Rain Detected!';
+  String get rainDetectedMsg => _tr ? 'Pencereler kapanıyor' : 'Windows closing';
+
+  String get motionDetectedTitle => _tr ? '🚨 Yetkisiz Giriş!' : '🚨 Intruder Alert!';
+  String get motionDetectedMsg => _tr ? 'Her şey kilitleniyor' : 'Everything locking';
+
+  String get cameraLiveTitle => _tr ? 'Canlı Kamera' : 'Live Camera';
+  String get cameraConnecting => _tr ? 'Akışa bağlanıyor...' : 'Connecting to stream...';
+  String get cameraConnectionFailed => _tr ? 'Kameraya bağlanılamadı' : 'Camera connection failed';
+  String get tailscaleConnectionHint => _tr ? 'Lütfen telefonunuzda Tailscale uygulamasını açın ve bağlanın.' : 'Please open Tailscale on your phone and connect.';
+  String get tailscaleSecureLabel => _tr ? 'Tailscale VPN üzerinden güvenli bağlantı' : 'Secure over Tailscale VPN';
 
   // ── Settings ───────────────────────────────────────────────────────────────
   String get settingsTitle => _tr ? 'Ayarlar' : 'Settings';

@@ -118,5 +118,9 @@
   "deviceOn": "ON",
   "deviceOff": "OFF",
   "raining": "Raining",
-  "clear": "Clear"
+  "clear": "Clear",
+  
+  "cameras": "Cameras",
+  "noCamerasFound": "No cameras available",
+  "errorLoadingCameras": "Error loading cameras"
 }

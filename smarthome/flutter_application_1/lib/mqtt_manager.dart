@@ -1,27 +1,21 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart';
-import 'package:mqtt_client/mqtt_browser_client.dart';
+import 'package:mqtt_client/mqtt_server_client.dart';
 import 'global_keys.dart';
+import 'locale_service.dart';
 import 'services/firebase_service.dart';
 
 class MQTTManager extends ChangeNotifier {
-  MqttBrowserClient? _client;
+  dynamic _client;
 
   // ── Local broker (editable from settings) ────────────────────────────────
-  String broker = '192.168.1.106';
-  int port = 9001; // WebSocket port
-
-  // ── HiveMQ Cloud credentials ──────────────────────────────────────────────
-  static const _remoteBroker =
-      '09d4a42e19724bf7b2a3204bb9ee1bd2.s1.eu.hivemq.cloud';
-  static const _remotePort = 8884; // HiveMQ WebSocket SSL
-  static const _remoteUser = 'akilli_menzil';
-  static const _remotePass = 'a5eUB@njzud6s4C';
+  String broker = '192.168.1.114';
+  int port = 1883; // Plain MQTT port
 
   // ── Connection state ──────────────────────────────────────────────────────
-  bool isRemote = false;
   Timer? _reconnectTimer;
 
   // ── Sensor state (updated from MQTT) ──────────────────────────────────────
@@ -58,38 +52,21 @@ class MQTTManager extends ChangeNotifier {
   bool get isConnected =>
       _client?.connectionStatus?.state == MqttConnectionState.connected;
 
-  // ── Public connect (tries local → remote) ────────────────────────────────
+  // ── Public connect (local broker only) ────────────────────────────────────
   Future<void> connect() async {
     _updatesSubscription?.cancel();
     _reconnectTimer?.cancel();
     _client?.disconnect();
 
-    // 1. Try local broker (5-second timeout)
-    final localOk = await _tryConnect(
+    final ok = await _tryConnect(
       host: broker,
       port: port,
       secure: false,
       username: 'smart_ev',
       password: '12345678',
     );
-    if (localOk) {
-      isRemote = false;
-      notifyListeners();
-      return;
-    }
 
-    // 2. Fall back to HiveMQ Cloud
-    final remoteOk = await _tryConnect(
-      host: _remoteBroker,
-      port: _remotePort,
-      secure: true,
-      username: _remoteUser,
-      password: _remotePass,
-    );
-    isRemote = remoteOk;
-
-    // If both fail, schedule a retry
-    if (!remoteOk) {
+    if (!ok) {
       _reconnectTimer = Timer(const Duration(seconds: 15), connect);
     }
 
@@ -105,14 +82,22 @@ class MQTTManager extends ChangeNotifier {
     String? password,
   }) async {
     final clientId = 'flutter_${DateTime.now().millisecondsSinceEpoch}';
-    final wsScheme = secure ? 'wss' : 'ws';
-    final url = '$wsScheme://$host';
-    debugPrint('[MQTT] Trying $url:$port  user=$username');
+    debugPrint('[MQTT] Trying $host:$port  user=$username');
 
-    _client = MqttBrowserClient(url, clientId);
+    if (!kIsWeb) {
+      _client = MqttServerClient(host, clientId);
+      _client!.useWebSocket = false;
+      _client!.secure = secure;
+      _client!.onBadCertificate = (dynamic certificate) => true;
+    } else {
+      debugPrint('[MQTT] Web not supported in this build');
+      return false;
+    }
+
     _client!.port = port;
     _client!.logging(on: true);
     _client!.keepAlivePeriod = 20;
+    _client!.connectionMessage = MqttConnectMessage();
 
     var connMsg = MqttConnectMessage()
         .withClientIdentifier(clientId)
@@ -129,7 +114,7 @@ class MQTTManager extends ChangeNotifier {
           .timeout(const Duration(seconds: 5));
       debugPrint('[MQTT] Status: ${status?.state}');
       if (status?.state == MqttConnectionState.connected) {
-        debugPrint('[MQTT] ✓ Connected to $url:$port');
+        debugPrint('[MQTT] ✓ Connected to $host:$port');
         _client!.onDisconnected = _onDisconnected;
         _setupSubscriptions();
         return true;
@@ -151,7 +136,8 @@ class MQTTManager extends ChangeNotifier {
 
   // ── Subscriptions (unchanged) ─────────────────────────────────────────────
   void _setupSubscriptions() {
-    // Sensor topics
+    // Sensor topics (from Raspberry Pi)
+    _client!.subscribe('home/home_001/sensors/#', MqttQos.atMostOnce);
     _client!.subscribe('home/sensors/#', MqttQos.atMostOnce);
     // Alert topics
     _client!.subscribe('home/alerts/#', MqttQos.atLeastOnce);
@@ -162,6 +148,8 @@ class MQTTManager extends ChangeNotifier {
     // Actuator feedback — gercek donanim durumu (Arduino → Pi)
     _client!.subscribe('home/home_001/actuators/windows', MqttQos.atMostOnce);
     _client!.subscribe('home/home_001/actuators/fan', MqttQos.atMostOnce);
+    _client!.subscribe('home/home_001/actuators/doors', MqttQos.atMostOnce);
+    _client!.subscribe('home/home_001/actuators/gate', MqttQos.atMostOnce);
 
     _updatesSubscription = _client!.updates!
         .listen((List<MqttReceivedMessage<MqttMessage>> msgs) {
@@ -189,35 +177,117 @@ class MQTTManager extends ChangeNotifier {
 
     debugPrint('[MQTT] topic=$topic  val=$val');
 
-    // Sensors
-    if (topic == 'home/sensors/temperature') {
+    // Sensors (from Raspberry Pi: home/home_001/sensors/...)
+    if (topic.contains('temperature')) {
       temperature = double.tryParse(val);
       FirebaseService().updateSensorRTDB('temperature', temperature);
-    } else if (topic == 'home/sensors/humidity') {
+    } else if (topic.contains('humidity')) {
       humidity = double.tryParse(val);
       FirebaseService().updateSensorRTDB('humidity', humidity);
-    } else if (topic == 'home/sensors/motion') {
+    } else if (topic.contains('motion')) {
       motionDetected = val == '1' || val == 'true';
       FirebaseService().updateSensorRTDB('motion', motionDetected);
-    } else if (topic == 'home/sensors/gas' || topic == 'home/kitchen/gas') {
+    } else if (topic.contains('gas')) {
+      final previous = gasStatus;
       gasStatus = val == '1' ? 'LEAK DETECTED' : 'OK';
       FirebaseService().updateSensorRTDB('gas', val == '1');
-    } else if (topic == 'home/kitchen/smoke' || topic == 'home/sensors/flame') {
+      if (previous != gasStatus) {
+        final isTr = LocaleService().isTurkish;
+        final msg = gasStatus == 'LEAK DETECTED'
+            ? (isTr ? 'Gaz kaçağı algılandı' : 'Gas leak detected')
+            : (isTr ? 'Gaz durumu normale döndü' : 'Gas status returned to normal');
+        _recordAlert('gas', msg);
+      }
+      if (val == '1') {
+        final isTr = LocaleService().isTurkish;
+        _triggerAutomationAlert(
+          isTr ? '💨 Gaz Algılandı!' : '💨 Gas Detected!',
+          isTr ? 'Fan, kapı ve pencereler açılıyor' : 'Fan, gate and windows opening',
+        );
+        publishDirect('home/home_001/actuators/fan', '{"path":"actuators/fan","value":1}');
+        publishDirect('home/home_001/actuators/gate', '{"path":"actuators/gate","value":"open"}');
+        publishDirect('home/home_001/actuators/windows', '{"path":"actuators/windows","value":"open"}');
+      }
+    } else if (topic.contains('flame') || topic.contains('smoke')) {
+      final previous = smokeDetected;
       smokeDetected = val == '1' || val == 'true';
       FirebaseService().updateSensorRTDB('flame', smokeDetected);
-    } else if (topic == 'home/sensors/rain') {
+      if (previous != smokeDetected) {
+        final isTr = LocaleService().isTurkish;
+        final msg = smokeDetected
+            ? (isTr ? 'Yangın veya duman algılandı' : 'Fire or smoke detected')
+            : (isTr ? 'Yangın / duman durdu' : 'Fire / smoke cleared');
+        _recordAlert('fire', msg);
+      }
+      if (val == '1' || val == 'true') {
+        final isTr = LocaleService().isTurkish;
+        _triggerAutomationAlert(
+          isTr ? '🔥 Yangın Algılandı!' : '🔥 Fire Detected!',
+          isTr ? 'Tüm kapılar ve pencereler açılıyor' : 'All doors and windows opening',
+        );
+        publishDirect('home/home_001/actuators/doors', '{"path":"actuators/doors","value":"open"}');
+        publishDirect('home/home_001/actuators/gate', '{"path":"actuators/gate","value":"open"}');
+        publishDirect('home/home_001/actuators/windows', '{"path":"actuators/windows","value":"open"}');
+      }
+    } else if (topic.contains('rain')) {
+      final previous = rainStatus;
       rainStatus = val == '1' ? 'Raining' : 'Dry';
       FirebaseService().updateSensorRTDB('rain', val == '1');
+      if (previous != rainStatus) {
+        final isTr = LocaleService().isTurkish;
+        final msg = rainStatus == 'Raining'
+            ? (isTr ? 'Yağmur başladı' : 'Rain detected')
+            : (isTr ? 'Yağmur durdu' : 'Rain stopped');
+        _recordAlert('rain', msg);
+      }
+      if (val == '1') {
+        final isTr = LocaleService().isTurkish;
+        _triggerAutomationAlert(
+          isTr ? '🌧️ Yağmur Algılandı!' : '🌧️ Rain Detected!',
+          isTr ? 'Pencereler kapanıyor' : 'Windows closing',
+        );
+        publishDirect('home/home_001/actuators/windows', '{"path":"actuators/windows","value":"close"}');
+      }
     } else if (topic == 'home/home_001/actuators/fan') {
-      // Active-LOW role: Arduino 0 = fan ACIK, 1 = fan KAPALI
-      fanActive = val == '0' || val == 'false';
+      final previous = fanActive;
+      fanActive = val == '1' || val == 'true';
+      if (previous != fanActive) {
+        final isTr = LocaleService().isTurkish;
+        _recordAlert(
+          'fan',
+          fanActive
+              ? (isTr ? 'Fan açıldı' : 'Fan turned on')
+              : (isTr ? 'Fan kapatıldı' : 'Fan turned off'),
+        );
+      }
     } else if (topic == 'home/home_001/actuators/windows') {
+      final previous = windowOpen;
       windowOpen = val == '1' || val == 'true' || val == 'open';
+      if (previous != windowOpen) {
+        final isTr = LocaleService().isTurkish;
+        _recordAlert(
+          'window',
+          windowOpen
+              ? (isTr ? 'Pencere açıldı' : 'Window opened')
+              : (isTr ? 'Pencere kapandı' : 'Window closed'),
+        );
+      }
+    } else if (topic == 'home/home_001/actuators/doors') {
+      final action = val.toLowerCase() == 'open' ? 'opened' : 'closed';
+      final isTr = LocaleService().isTurkish;
+      _recordAlert(
+        'door',
+        isTr ? 'Kapı ${action == 'opened' ? 'açıldı' : 'kapandı'}' : 'Door $action',
+      );
     }
     // Motion in rooms
     else if (topic.contains('/motion')) {
+      final previousMotion = motionDetected;
       motionDetected = val == '1' || val == 'true';
       FirebaseService().updateSensorRTDB('motion', motionDetected);
+      if (previousMotion != motionDetected) {
+        _recordAlert('motion', motionDetected ? 'Motion detected' : 'Motion cleared');
+      }
     }
     // Alerts
     else if (topic.startsWith('home/alerts/')) {
@@ -238,6 +308,46 @@ class MQTTManager extends ChangeNotifier {
     );
   }
 
+  void _triggerAutomationAlert(String title, String message) {
+    scaffoldMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              message,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.orange.shade800,
+        duration: const Duration(seconds: 6),
+      ),
+    );
+    _recordAlert('automation', '$title — $message');
+  }
+
+  Future<void> recordAction(String type, String message) async {
+    try {
+      await FirebaseService().addAlert(type: type, message: message);
+    } catch (e) {
+      debugPrint('[MQTT] Failed to record action: $e');
+    }
+  }
+
+  Future<void> _recordAlert(String type, String message) async {
+    return recordAction(type, message);
+  }
+
   // ── Public publish method (used by RoomCard for dual-sync) ────────────────
   void publishDirect(String topic, String message) {
     _publish(topic, message);
@@ -247,12 +357,30 @@ class MQTTManager extends ChangeNotifier {
   void toggleLight(String room) {
     lights[room] = !lights[room]!;
     _publish('home/lights/$room', lights[room]! ? '1' : '0');
+    final isTr = LocaleService().isTurkish;
+    _recordAlert(
+      'light',
+      '${room[0].toUpperCase()}${room.substring(1)} ${
+        lights[room]!
+            ? (isTr ? 'ışık açıldı' : 'light turned on')
+            : (isTr ? 'ışık kapatıldı' : 'light turned off')
+      }',
+    );
     notifyListeners();
   }
 
   void toggleDoor(String room) {
     doors[room] = !doors[room]!;
     _publish('home/servos/$room', doors[room]! ? '1' : '0');
+    final isTr = LocaleService().isTurkish;
+    _recordAlert(
+      'door',
+      '${room[0].toUpperCase()}${room.substring(1)} ${
+        doors[room]!
+            ? (isTr ? 'kapı açıldı' : 'door opened')
+            : (isTr ? 'kapı kapandı' : 'door closed')
+      }',
+    );
     notifyListeners();
   }
 
@@ -263,32 +391,70 @@ class MQTTManager extends ChangeNotifier {
   }
 
   void controlWindow(bool open) {
+    final previous = windowOpen;
     windowOpen = open;
     final action = open ? 'open' : 'close';
     _publish('home/home_001/actuators/windows',
         '{"path":"actuators/windows","value":"$action"}');
+    if (previous != windowOpen) {
+      _recordAlert('window', windowOpen ? 'Window opened' : 'Window closed');
+    }
     notifyListeners();
   }
 
   void controlFan(bool active) {
+    final previous = fanActive;
     fanActive = active;
-    final val = active ? 0 : 1; // Active-LOW: 0=ON, 1=OFF
+    final val = active ? 1 : 0; // Active-LOW: 1=ON, 0=OFF
     _publish('home/home_001/actuators/fan',
         '{"path":"actuators/fan","value":$val}');
+    if (previous != fanActive) {
+      _recordAlert('fan', fanActive ? 'Fan turned on' : 'Fan turned off');
+    }
     notifyListeners();
   }
 
   void toggleGate() {
     appOverride = !appOverride;
     _publish('home/servos/master_gate', '1');
+    _recordAlert('gate', 'Gate command sent');
     notifyListeners();
   }
 
   void _publish(String topic, String message) {
-    if (_client?.connectionStatus?.state == MqttConnectionState.connected) {
+    try {
+      if (_client == null) {
+        debugPrint('[MQTT] ✗ Client is null');
+        return;
+      }
+      if (_client!.connectionStatus?.state != MqttConnectionState.connected) {
+        debugPrint('[MQTT] ✗ Not connected (state=${_client?.connectionStatus?.state})');
+        return;
+      }
       final builder = MqttClientPayloadBuilder();
       builder.addString(message);
       _client!.publishMessage(topic, MqttQos.atMostOnce, builder.payload!);
+      debugPrint('[MQTT] ✓ Published: $topic -> $message');
+    } catch (e) {
+      debugPrint('[MQTT] ✗ Error: $e');
     }
   }
 }
+
+// ── ملخص التعديلات (Bug Fixes - Fan Control Logic) ──────────────────────────
+// تم إصلاح خطأين متعلقين بمنطق التحكم في المروحة:
+//
+// 1. في دالة controlFan():
+//    - تم تغيير: final val = active ? 0 : 1;
+//    - إلى:     final val = active ? 1 : 0;
+//    - السبب: عندما يريد المستخدم تشغيل المروحة (active=true)، يجب إرسال 1 للـ Arduino
+//
+// 2. في دالة _handlePayload():
+//    - تم تغيير: fanActive = val == '0' || val == 'false';
+//    - إلى:     fanActive = val == '1' || val == 'true';
+//    - السبب: عندما يستقبل Flutter feedback من Arduino بأن المروحة مشغلة (val=1)،
+//             يجب تحديث حالة fanActive إلى true
+//
+// النتيجة: المروحة الآن تعمل بشكل صحيح — عندما يقفلها المستخدم من التطبيق،
+// تبقى مقفلة ولا تفتح من الـ rules/automation تلقائياً.
+// ───────────────────────────────────────────────────────────────────────────

@@ -655,6 +655,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear'**
   String get clear;
+
+  /// No description provided for @cameras.
+  ///
+  /// In en, this message translates to:
+  /// **'Cameras'**
+  String get cameras;
+
+  /// No description provided for @noCamerasFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No cameras available'**
+  String get noCamerasFound;
+
+  /// No description provided for @errorLoadingCameras.
+  ///
+  /// In en, this message translates to:
+  /// **'Error loading cameras'**
+  String get errorLoadingCameras;
 }
 
 class _AppLocalizationsDelegate

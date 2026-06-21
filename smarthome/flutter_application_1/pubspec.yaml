@@ -41,6 +41,8 @@ dependencies:
   firebase_database: ^11.0.0
   firebase_messaging: ^15.0.0
   google_sign_in: ^6.0.0
+  web: 0.5.1
+  flutter_mjpeg: ^2.0.4
 
 dev_dependencies:
   flutter_test:

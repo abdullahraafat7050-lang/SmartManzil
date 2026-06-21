@@ -48,7 +48,7 @@ class RoomCard extends StatelessWidget {
     FirebaseService().toggleLight(roomKey, !current);
     final relay = _relayMap[roomKey];
     if (relay != null) {
-      final val = !current ? 0 : 1; // Active-LOW relay: 0=ON, 1=OFF
+      final val = !current ? 1 : 0; // Active-LOW relay: 1=ON, 0=OFF
       mqtt.publishDirect(
         'home/home_001/actuators/lights',
         '{"path":"actuators/$relay","value":$val}',

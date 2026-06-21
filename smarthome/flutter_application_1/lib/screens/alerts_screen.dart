@@ -13,11 +13,21 @@ class AlertsScreen extends StatelessWidget {
   Color _colorFor(String? type) {
     switch (type?.toLowerCase()) {
       case 'gas':
-      case 'fire':
         return Colors.redAccent;
+      case 'fire':
+        return Colors.deepOrangeAccent;
+      case 'rain':
+        return Colors.lightBlueAccent;
       case 'motion':
-      case 'intrusion':
         return Colors.orangeAccent;
+      case 'fan':
+      case 'window':
+      case 'door':
+      case 'light':
+      case 'gate':
+        return Colors.greenAccent;
+      case 'automation':
+        return Colors.amberAccent;
       default:
         return _gold;
     }
@@ -29,11 +39,51 @@ class AlertsScreen extends StatelessWidget {
         return Icons.gas_meter_outlined;
       case 'fire':
         return Icons.local_fire_department_outlined;
+      case 'rain':
+        return Icons.umbrella_outlined;
       case 'motion':
-      case 'intrusion':
         return Icons.directions_run;
+      case 'fan':
+        return Icons.air;
+      case 'window':
+        return Icons.window;
+      case 'door':
+        return Icons.door_front_door;
+      case 'light':
+        return Icons.lightbulb_outline;
+      case 'gate':
+        return Icons.garage;
+      case 'automation':
+        return Icons.auto_awesome;
       default:
         return Icons.notifications_outlined;
+    }
+  }
+
+  String _titleFor(String? type, S s) {
+    switch (type?.toLowerCase()) {
+      case 'gas':
+        return s.gas;
+      case 'fire':
+        return s.fire;
+      case 'rain':
+        return s.rain;
+      case 'motion':
+        return s.motion;
+      case 'fan':
+        return s.fan;
+      case 'window':
+        return s.window;
+      case 'door':
+        return s.door;
+      case 'light':
+        return s.light;
+      case 'gate':
+        return s.gate;
+      case 'automation':
+        return s.automation;
+      default:
+        return type?.toUpperCase() ?? '';
     }
   }
 
@@ -140,7 +190,7 @@ class AlertsScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (type != null)
-                            Text(type.toUpperCase(),
+                            Text(_titleFor(type, s),
                                 style: TextStyle(
                                     color: color,
                                     fontSize: 11,
